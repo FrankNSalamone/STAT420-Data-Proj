@@ -55,6 +55,166 @@ nrow(london)
 ncol(london)
 ```
 
+Notes from project expectations:Introduction
+Lay everything out in terms of data.  Objective of what want to learn about data.
+Methods
+First part:
+Exploratory analysis.  Lay out what variables look like they are related to the response through correlation
+analysis.  Scatterplot matrix.  Basic analysis.  Hint on possibility of collinearity.
+Second part:
+Some connector between predictors and response in linear fashon.  Main effects analysis.
+Aren't completely happy.  Give RMSE, RSE, adjusted r^2.
+Next try to remove predictors to increase explanatory power.
+Third part:
+Try transformations, interactions.  Polynomial terms.
+Do backward elimination from your big model from above.
+Go in same order as introduced in the course.
+Results
+Dont' characterize all models.  2 or 3 or 4models that seem to be the best.  Say why fully additive model
+didn't work.  Show progress that you made.  End results.  Hit the highlights.
+Discussion
+Table with candidate model, with RMSC, residuals, assumptions.  Argue why model is the best.
+
+## Introduction
+
+rubric:  Introduction  Lay everything out in terms of data.  Objective of what want to learn about data.
+
+From an outsider’s perspective, the Airbnb platform has revolutionized the renting of rooms much as Uber has revolutionized ridesharing.  Airbnb allows users of the platform to monetize property that they would not be able to otherwise.  In order to determine if renting out a room is a good business case or worth the owner’s time, it would be helpful to have an estimate of how much income the room would generate.  Our proposal is to develop a model, trained on the London Weekend Airbnb data, that could predict the room rental income based on predictors known to the person putting the room up for rent.  The data is available on Kaggle at https://www.kaggle.com/datasets/thedevastator/airbnb-prices-in-european-cities, and from the original authors, Gyódi, Kristóf and Nawaro, Łukasz at https://zenodo.org/record/4446043#.Y9Y9ENJBwUE.
+
+The columns of the database include:
+
+realSum: the full price of accommodation for two people and two nights in EUR
+room_type: the type of the accommodation 
+room_shared: dummy variable for shared rooms
+room_private: dummy variable for private rooms
+person_capacity: the maximum number of guests 
+host_is_superhost: dummy variable for superhost status
+multi: dummy variable if the listing belongs to hosts with 2-4 offers
+biz: dummy variable if the listing belongs to hosts with more than 4 offers
+cleanliness_rating: cleanliness rating
+guest_satisfaction_overall: overall rating of the listing
+bedrooms: number of bedrooms (0 for studios)
+dist: distance from city centre in km
+metro_dist: distance from nearest metro station in km
+attr_index: attraction index of the listing location
+attr_index_norm: normalised attraction index (0-100)
+rest_index: restaurant index of the listing location
+attr_index_norm: normalised restaurant index (0-100)
+lng: longitude of the listing location
+lat: latitude of the listing location
+
+What are the dimensions of the dataset?
+
+```{r}
+nrow(london)
+ncol(london)
+```
+
+There are 5379 rows of data with 20 variables, as described above.
+
+## Methods
+
+Rubric:
+Methods
+First part:
+Exploratory analysis.  Lay out what variables look like they are related to the response through correlation
+analysis.  Scatterplot matrix.  Basic analysis.  Hint on possibility of collinearity.
+Second part:
+Some connector between predictors and response in linear fashon.  Main effects analysis.
+Aren't completely happy.  Give RMSE, RSE, adjusted r^2.
+Next try to remove predictors to increase explanatory power.
+Third part:
+Try transformations, interactions.  Polynomial terms.
+Do backward elimination from your big model from above.
+Go in same order as introduced in the course.
+
+
+### Data Cleaning
+
+There are several variables that need to be converted to factors.  These include: room_type, room_shared, room_private, and host_is_superhost.  
+
+```{r}
+unique(london$room_type) 
+unique(london$room_shared)
+unique(london$room_private)
+unique(london$host_is_superhost)
+```
+
+The room_type column can converted into a 3 level factor variable with the levels being: "Private room", "Entire home/apt", and "Shared room".
+
+Another question is if room_shared and room_private are independent.
+
+```{r}
+mean(london$room_shared == london$room_private)
+```
+
+Based on the data, they mean different things.
+
+Columns multi and biz are factors stored as integers.
+
+```{r}
+unique(london$multi)
+unique(london$biz)
+```
+
+Switch these to True and False.
+
+```{r}
+london$multi[london$multi == 0] = "False"
+london$multi[london$multi == 1] = "True"
+london$biz[london$biz == 0] = "False"
+london$biz[london$biz == 1] = "True"
+```
+
+The bedrooms and person_capacity column should also be changed to a factor.
+
+```{r}
+unique(london$bedrooms)
+unique(london$person_capacity)
+```
+
+Switch all to factors.
+
+```{r}
+london$room_type = as.factor(london$room_type)
+london$room_shared = as.factor(london$room_shared)
+london$room_private = as.factor(london$room_private)
+london$person_capacity = as.factor(london$person_capacity)
+london$host_is_superhost = as.factor(london$host_is_superhost)
+london$multi = as.factor(london$multi)
+london$biz = as.factor(london$biz)
+london$bedrooms = as.factor(london$bedrooms)
+head(london)
+```
+
+attr_index and attr_index_norm will be colinear, as will rest_index and rest_index_norm, so the non-normalized columns.
+
+```{r}
+cor(london$attr_index, london$attr_index_norm)
+london = subset(london, select = -c(attr_index, rest_index))
+```
+
+
+See if there are any NAs:
+
+```{r}
+sum(is.na(london))
+```
+
+```{r}
+head(london)
+```
+
+
+### Exploratory Analysis
+
+
+
+```{r}
+pairs(london, subset = c(cleanliness_rating))
+```
+
+
 
 ***
 
