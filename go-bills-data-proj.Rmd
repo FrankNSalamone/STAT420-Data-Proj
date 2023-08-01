@@ -48,11 +48,13 @@ From an outsider’s perspective, the Airbnb platform has revolutionized the ren
 **Solution**
 
 ```{r}
-london = read.csv("london_weekends.csv")
-head(london$realSum)
-head(london)
-nrow(london)
-ncol(london)
+df = read.csv("london_weekends.csv")
+df = df[, !(names(df) %in% 'X')]
+
+nrow(df)
+ncol(df)
+
+head(df, 5)
 ```
 
 
@@ -102,11 +104,11 @@ attr_index_norm: normalised restaurant index (0-100)
 lng: longitude of the listing location
 lat: latitude of the listing location
 
-What are the dimensions of the dataset?
+*What are the dimensions of the dataset?*
 
 ```{r}
-nrow(london)
-ncol(london)
+nrow(df)
+ncol(df)
 ```
 
 There are 5379 rows of data with 20 variables, as described above.
@@ -128,15 +130,141 @@ Do backward elimination from your big model from above.
 Go in same order as introduced in the course.
 
 
-### Data Cleaning
+# Data Exploratiom -> Data Cleaning -> Model Building -> Present Results
+
+
+## Exploratory Analysis
+
+```{r}
+head(df, 5)
+```
+
+*Dataset dimensions*
+```{r}
+nrow(df)
+ncol(df)
+```
+
+*The structure of the dataset*
+```{r}
+str(df)
+```
+*The summary statistics of the dataset*
+```{r}
+summary(df)
+```
+
+*Missing values in the dataset*
+```{r}
+colSums(is.na(df))
+```
+
+*Numerical/Categorical variables*
+```{r}
+target = 'realSum'
+numerical_vars = c('dist', 'metro_dist', 'attr_index', 'attr_index_norm', 'rest_index', 'rest_index_norm', 'lng', 'lat') #sapply(df, is.numeric)
+categorical_vars = names(df)[!names(df) %in% numerical_vars]
+```
+
+*Remove outliers*
+```{r}
+# Interquartile Range method (IQR)
+get_outliers_idx = function(data) {
+  Q1 = quantile(data, 0.25)
+  Q3 = quantile(data, 0.75)
+  
+  IQR = Q3 - Q1
+  
+  lower_bound = Q1 - 1.5 * IQR
+  upper_bound = Q3 + 1.5 * IQR
+  
+  idx = which(data < lower_bound | data > upper_bound)
+  
+  return(idx)
+}
+
+```
+
+```{r}
+library(dplyr)
+
+idx = c()
+for (col in numerical_vars) {
+ idx = union(idx, get_outliers_idx(df[[col]]))
+}
+df = df[-idx,]
+print(length(idx))
+```
+*Numerical variables: hist*
+```{r}
+# par(mfrow = c(1, length(numerical_vars)))
+for (col in numerical_vars) {
+  hist(df[[col]], main = col, xlab = "Value", ylab = "Frequency")
+}
+```
+
+
+
+*The relationship between variables*
+
+*Correlation*
+```{r}
+library(corrplot)
+
+cor_mx = cor(df[numerical_vars])
+
+corrplot(cor_mx, method = "color")
+```
+
+
+*Pairplots*
+```{r}
+pairs(df[numerical_vars])
+```
+*Categorical variables*
+```{r}
+
+for (col in categorical_vars) {
+  print(col)
+  boxplot(realSum ~ df[[col]], data = df, 
+        main = paste0("realSum vs. ", col), 
+        xlab = "Room Type", 
+        ylab = "Real Sum")
+}
+
+
+```
+
+*The distribution of the target variable*
+```{r}
+MIN_VALUE = 0
+MAX_VALUE = 3000
+NUM_BINS = 15
+
+bin_width = (MAX_VALUE - MIN_VALUE) / NUM_BINS
+
+breakpoints = seq(MIN_VALUE, MAX_VALUE, by = bin_width)
+
+hist(df$realSum[df$realSum < MAX_VALUE],
+     main = "Distribution of realSum",
+     xlab = "Real Sum",
+     ylab = "Frequency",
+     breaks = breakpoints)
+```
+
+
+
+***
+
+## Data Cleaning
 
 There are several variables that need to be converted to factors.  These include: room_type, room_shared, room_private, and host_is_superhost.  
 
 ```{r}
-unique(london$room_type) 
-unique(london$room_shared)
-unique(london$room_private)
-unique(london$host_is_superhost)
+unique(df$room_type) 
+unique(df$room_shared)
+unique(df$room_private)
+unique(df$host_is_superhost)
 ```
 
 The room_type column can converted into a 3 level factor variable with the levels being: "Private room", "Entire home/apt", and "Shared room".
@@ -144,7 +272,7 @@ The room_type column can converted into a 3 level factor variable with the level
 Another question is if room_shared and room_private are independent.
 
 ```{r}
-mean(london$room_shared == london$room_private)
+mean(df$room_shared == df$room_private)
 ```
 
 Based on the data, they mean different things.
@@ -152,65 +280,59 @@ Based on the data, they mean different things.
 Columns multi and biz are factors stored as integers.
 
 ```{r}
-unique(london$multi)
-unique(london$biz)
+unique(df$multi)
+unique(df$biz)
 ```
 
 Switch these to True and False.
 
 ```{r}
-london$multi[london$multi == 0] = "False"
-london$multi[london$multi == 1] = "True"
-london$biz[london$biz == 0] = "False"
-london$biz[london$biz == 1] = "True"
+df$multi[df$multi == 0] = "False"
+df$multi[df$multi == 1] = "True"
+df$biz[df$biz == 0] = "False"
+df$biz[df$biz == 1] = "True"
 ```
 
 The bedrooms and person_capacity column should also be changed to a factor.
 
 ```{r}
-unique(london$bedrooms)
-unique(london$person_capacity)
+unique(df$bedrooms)
+unique(df$person_capacity)
 ```
 
 Switch all to factors.
 
 ```{r}
-london$room_type = as.factor(london$room_type)
-london$room_shared = as.factor(london$room_shared)
-london$room_private = as.factor(london$room_private)
-london$person_capacity = as.factor(london$person_capacity)
-london$host_is_superhost = as.factor(london$host_is_superhost)
-london$multi = as.factor(london$multi)
-london$biz = as.factor(london$biz)
-london$bedrooms = as.factor(london$bedrooms)
-head(london)
+df$room_type = as.factor(df$room_type)
+df$room_shared = as.factor(df$room_shared)
+df$room_private = as.factor(df$room_private)
+df$person_capacity = as.factor(df$person_capacity)
+df$host_is_superhost = as.factor(df$host_is_superhost)
+df$multi = as.factor(df$multi)
+df$biz = as.factor(df$biz)
+df$bedrooms = as.factor(df$bedrooms)
+head(df)
 ```
 
 attr_index and attr_index_norm will be colinear, as will rest_index and rest_index_norm, so the non-normalized columns.
 
 ```{r}
-cor(london$attr_index, london$attr_index_norm)
-london = subset(london, select = -c(attr_index, rest_index))
+cor(df$attr_index, df$attr_index_norm)
+df = subset(df, select = -c(attr_index, rest_index))
 ```
 
 
 See if there are any NAs:
 
 ```{r}
-sum(is.na(london))
+# sum(is.na(df))
+colSums(is.na(df))
 ```
 
-```{r}
-head(london)
-```
-
-
-### Exploratory Analysis
-
-
+***
 
 ```{r}
-london_numeric = subset(london, select = c(cleanliness_rating, guest_satisfaction_overall, dist, metro_dist, attr_index_norm, rest_index_norm))
+london_numeric = subset(df, select = c(cleanliness_rating, guest_satisfaction_overall, dist, metro_dist, attr_index_norm, rest_index_norm))
 pairs(london_numeric)
 ```
 
@@ -220,14 +342,14 @@ Let us first check for colinearity.
 
 
 ```{r}
-full_mod = lm(realSum ~ ., data = london)
+full_mod = lm(realSum ~ ., data = df)
 summary(full_mod)
 ```
 
 It looks like room_shared and room_private have exact colinearity with room_type, so let us remove them.
 
 ```{r}
-full_a = lm(realSum ~ . - room_shared - room_private, data = london)
+full_a = lm(realSum ~ . - room_shared - room_private, data = df)
 summary(full_a)
 ```
 
@@ -245,26 +367,26 @@ The variables with VIF values more than 5 include dist, attr_index_norm, and res
 What does the distribution of the room prices look like?
 
 ```{r}
-hist(london$realSum)
+hist(df$realSum)
 ```
 
 Maybe this would look better if we took the logarithm.  
 
 ```{r}
-hist(log(london$realSum))
+hist(log(df$realSum))
 ```
 
 This does look much better.  Let us try to fit a model with the log transformation of the response.
 
 ```{r}
-full_a = lm(log(realSum) ~ . - room_shared - room_private, data = london)
+full_a = lm(log(realSum) ~ . - room_shared - room_private, data = df)
 summary(full_a)
 ```
 
 Lets do a model with interactions, and then reduce the number of variables with backward AIC.
 
 ```{r}
-full_interact = lm(log(realSum) ~ (. - room_shared - room_private)^2, data = london)
+full_interact = lm(log(realSum) ~ (. - room_shared - room_private)^2, data = df)
 summary(full_interact)
 ```
 
