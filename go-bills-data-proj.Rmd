@@ -172,25 +172,29 @@ unique(london$bedrooms)
 unique(london$person_capacity)
 ```
 
-Switch all to factors.
+Switch all to factors, also keep a copy of london with bedrooms and person_capacity as integers 
 
 ```{r}
 london$room_type = as.factor(london$room_type)
 london$room_shared = as.factor(london$room_shared)
 london$room_private = as.factor(london$room_private)
-london$person_capacity = as.factor(london$person_capacity)
-london$host_is_superhost = as.factor(london$host_is_superhost)
 london$multi = as.factor(london$multi)
 london$biz = as.factor(london$biz)
+london$host_is_superhost = as.factor(london$host_is_superhost)
+london_less_factors = london
+london$person_capacity = as.factor(london$person_capacity)
 london$bedrooms = as.factor(london$bedrooms)
 head(london)
+head(london_less_factors)
 ```
 
-attr_index and attr_index_norm will be colinear, as will rest_index and rest_index_norm, so the non-normalized columns.
+Variables attr_index and attr_index_norm will be collinear, as will rest_index and rest_index_norm, so the non-normalized columns are removed from the dataframe.  Also, on initial analysis of linear models, it was apparent that room_shared and room_private are exactly collinear with room_type, so they will be removed.  Also, remove the index X
 
 ```{r}
 cor(london$attr_index, london$attr_index_norm)
-london = subset(london, select = -c(attr_index, rest_index))
+cor(london$rest_index, london$rest_index_norm)
+london = subset(london, select = -c(attr_index, rest_index, room_shared, room_private, X))
+london_less_factors = subset(london_less_factors, select = -c(attr_index, rest_index, room_shared, room_private, X))
 ```
 
 
@@ -202,45 +206,78 @@ sum(is.na(london))
 
 ```{r}
 head(london)
+head(london_less_factors)
 ```
 
 
 ### Exploratory Analysis
 
+#### Main Effects Analysis
 
+```{r}
+full_additive_mod = lm(realSum ~ ., data = london)
+summary(full_additive_mod)
+```
+Fitting an additive model with no interactions to the data yields an $R^2 = 0.2769$.  This seems quite low.  
+
+Bedrooms and person_capacity have a large number of values, maybe a model with them as numbers, not factors would give a better fit.
+
+```{r}
+full_additive_less_factors_mod = lm(realSum ~ ., data = london_less_factors)
+summary(full_additive_less_factors_mod)
+```
+Using bedrooms and person_capacity gives a slightly worse $R^2 = 0.2581$, as compared to $R^2 = 0.2769$ as factors.
+
+We will use AIC to determine if any of the predictors can be dropped.
+
+```{r}
+aic_full_additive_mod = step(full_additive_mod, direction = "backward", trace = FALSE)
+summary(aic_full_additive_mod)
+```
+AIC eliminates just host_is_superhostTrue, multiTrue, bizTrue, cleanliness_rating, rest_index_norm, and lat.  The $R^2$ value of this model left after AIC elimination is almost the same at 0.2768 as compared to the full additive model with an $R^2$ of 0.2769. 
+
+We will now try BIC to see if this results in a smaller model.
+
+```{r}
+bic_full_additive_mod = step(full_additive_mod, direction = "backward", k = log(nrow(london)), trace = FALSE)
+summary(bic_full_additive_mod)
+```
+
+BIC, as we would expect, produces a smaller model.
+
+We will now use ANOVA to see if there is any significant difference between the models explored in this main effects analysis.
+
+```{r}
+anova(aic_full_additive_mod, full_additive_mod)
+anova(bic_full_additive_mod, full_additive_mod)
+```
+
+So, we reject the null hypothesis with regards to the model obtained with BIC, and choose the model obtained through AIC elimination.  The $R^2$ value is still quite low with just an additive model.
+
+As there is little difference between these models, we will continue the analysis with the full linear model.
+
+#### Collinearity Analysis
+
+Although collinearity likely will not affect prediction, it will affect our ability to perform inference tests.
 
 ```{r}
 london_numeric = subset(london, select = c(cleanliness_rating, guest_satisfaction_overall, dist, metro_dist, attr_index_norm, rest_index_norm))
 pairs(london_numeric)
 ```
 
-Some of these data show colinearity and some are look non-linear.
+Some of these data show collinearity and some look non-linear.  In particular, distance and metro_distance seem to be collinear.
 
-Let us first check for colinearity.
-
-
-```{r}
-full_mod = lm(realSum ~ ., data = london)
-summary(full_mod)
-```
-
-It looks like room_shared and room_private have exact colinearity with room_type, so let us remove them.
-
-```{r}
-full_a = lm(realSum ~ . - room_shared - room_private, data = london)
-summary(full_a)
-```
-
-
-Check variance inflation factors.
+Let us check for collinearity using the variance inflation factor.
 
 ```{r}
 library(faraway)
-vif(full_a)
-vif(full_a)[unname(vif(full_a)) > 5]
+vif(full_additive_mod)
+vif(full_additive_mod)[unname(vif(full_additive_mod)) > 5]
 ``` 
 
-The variables with VIF values more than 5 include dist, attr_index_norm, and rest_index_norm. This makes sense as dist is the distance to the city center, and it is likely if this is small, the number of attractions and restaurants (as measured by attr_index_norm and rest_index_norm) would be high.  Also, metro_dist, the distance to a metro station, would likely be small if dist is small. 
+Per the textbook, predictors with a VIF of more than 5 are suspicious for collinearity.  The variables with VIF values more than 5 include dist, attr_index_norm, and rest_index_norm. This makes sense as dist is the distance to the city center, and it is likely that if this is small, the number of attractions and restaurants (as measured by attr_index_norm and rest_index_norm) would be high.  There are more attractions and restaurants near the city center.  Also, metro_dist, the distance to a metro station, would likely be small if dist is small. These values are not tremendously larger than 5, so we will keep them in model.
+
+#### Transformation Analysis
 
 What does the distribution of the room prices look like?
 
@@ -248,7 +285,7 @@ What does the distribution of the room prices look like?
 hist(london$realSum)
 ```
 
-Maybe this would look better if we took the logarithm.  
+Maybe this would look better if we took the logarithm.  This is a typical transformation for prices that can vary over several orders of magnitude.  
 
 ```{r}
 hist(log(london$realSum))
@@ -257,9 +294,12 @@ hist(log(london$realSum))
 This does look much better.  Let us try to fit a model with the log transformation of the response.
 
 ```{r}
-full_a = lm(log(realSum) ~ . - room_shared - room_private, data = london)
+full_log_model = lm(log(realSum) ~ ., data = london)
 summary(full_a)
 ```
+The log transformation gives a much better $R^2$.  The $R^2$ value increased from around 0.27 to 0.6878 with the log transform.
+
+#### Interaction Analysis
 
 Lets do a model with interactions, and then reduce the number of variables with backward AIC.
 
@@ -267,6 +307,97 @@ Lets do a model with interactions, and then reduce the number of variables with 
 full_interact = lm(log(realSum) ~ (. - room_shared - room_private)^2, data = london)
 summary(full_interact)
 ```
+
+```{r}
+mod = step (full_interact, direction = "backward", trace = FALSE)
+```
+
+
+```{r}
+summary(mod)
+```
+
+Try bedrooms and person_capacity as numbers, not factors.
+
+```{r}
+full_less_factors = lm(log(realSum) ~ (.  - room_shared - room_private)^2, data = london_less_factors)
+summary(full_less_factors)
+```
+Having the variables as factors gives a better fit.  The R^2 value for the models using factors is 0.7304, while it is 0.7222 for the numeric.  I will continue to use factor model. 
+
+```{r}
+summary(mod)
+```
+
+Try a smaller model
+
+```{r}
+smaller = lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + dist + rest_index_norm + person_capacity:bedrooms + attr_index_norm:rest_index_norm , data = london_less_factors)
+summary(smaller)
+```
+
+Try transformations of other variables
+
+```{r}
+hist(london$rest_index_norm)
+```
+
+```{r}
+hist(log(london$rest_index_norm))
+```
+
+We can try a transformation of rest_index_norm
+
+```{r}
+smaller_log = lm(log(realSum) ~ room_type + person_capacity + dist + log1p(rest_index_norm) + cleanliness_rating:guest_satisfaction_overall  + person_capacity:bedrooms + attr_index_norm:rest_index_norm , data = london_less_factors)
+summary(smaller_log)
+```
+
+Try forward BIC
+
+```{r}
+full_interact_less_fact = lm(log(realSum) ~ (. - room_shared - room_private)^2, data = london_less_factors)
+bic_mod = step(smaller_log, scope = log(realSum) ~ .^2, k = log(nrow(london_less_factors)), trace = FALSE)
+bic_mod
+```
+
+
+```{r}
+summary(bic_mod)
+```
+
+```{r}
+bic_mod_fact = lm(formula = log(realSum) ~ room_type + person_capacity + dist + 
+    log1p(rest_index_norm) + cleanliness_rating:guest_satisfaction_overall + 
+    person_capacity:bedrooms + attr_index_norm:rest_index_norm + 
+    dist:log1p(rest_index_norm) + room_type:person_capacity + 
+    log1p(rest_index_norm):cleanliness_rating:guest_satisfaction_overall + 
+    log1p(rest_index_norm):attr_index_norm:rest_index_norm + 
+    room_type:cleanliness_rating:guest_satisfaction_overall + 
+    room_type:person_capacity:bedrooms + dist:attr_index_norm:rest_index_norm, 
+    data = london)
+summary(bic_mod_fact)
+```
+Another smaller model attempt:
+
+```{r}
+attempt2 = lm(log(realSum) ~ room_type + person_capacity + dist + 
+    log1p(rest_index_norm) + cleanliness_rating:guest_satisfaction_overall + 
+    person_capacity:bedrooms + attr_index_norm:rest_index_norm + 
+    dist:log1p(rest_index_norm) + room_type:person_capacity + 
+    log1p(rest_index_norm):cleanliness_rating:guest_satisfaction_overall + 
+    log1p(rest_index_norm):attr_index_norm:rest_index_norm + 
+    room_type:cleanliness_rating:guest_satisfaction_overall + dist:attr_index_norm:rest_index_norm, 
+    data = london)
+summary(attempt2)
+```
+
+```{r}
+
+```
+
+
+######Check if overfiit
 
 
 ***
