@@ -55,8 +55,7 @@ nrow(london)
 ncol(london)
 ```
 
-Notes from project expectations:Introduction
-Lay everything out in terms of data.  Objective of what want to learn about data.
+
 Methods
 First part:
 Exploratory analysis.  Lay out what variables look like they are related to the response through correlation
@@ -211,9 +210,63 @@ head(london)
 
 
 ```{r}
-pairs(london, subset = c(cleanliness_rating))
+london_numeric = subset(london, select = c(cleanliness_rating, guest_satisfaction_overall, dist, metro_dist, attr_index_norm, rest_index_norm))
+pairs(london_numeric)
 ```
 
+Some of these data show colinearity and some are look non-linear.
+
+Let us first check for colinearity.
+
+
+```{r}
+full_mod = lm(realSum ~ ., data = london)
+summary(full_mod)
+```
+
+It looks like room_shared and room_private have exact colinearity with room_type, so let us remove them.
+
+```{r}
+full_a = lm(realSum ~ . - room_shared - room_private, data = london)
+summary(full_a)
+```
+
+
+Check variance inflation factors.
+
+```{r}
+library(faraway)
+vif(full_a)
+vif(full_a)[unname(vif(full_a)) > 5]
+``` 
+
+The variables with VIF values more than 5 include dist, attr_index_norm, and rest_index_norm. This makes sense as dist is the distance to the city center, and it is likely if this is small, the number of attractions and restaurants (as measured by attr_index_norm and rest_index_norm) would be high.  Also, metro_dist, the distance to a metro station, would likely be small if dist is small. 
+
+What does the distribution of the room prices look like?
+
+```{r}
+hist(london$realSum)
+```
+
+Maybe this would look better if we took the logarithm.  
+
+```{r}
+hist(log(london$realSum))
+```
+
+This does look much better.  Let us try to fit a model with the log transformation of the response.
+
+```{r}
+full_a = lm(log(realSum) ~ . - room_shared - room_private, data = london)
+summary(full_a)
+```
+
+Lets do a model with interactions, and then reduce the number of variables with backward AIC.
+
+```{r}
+full_interact = lm(log(realSum) ~ (. - room_shared - room_private)^2, data = london)
+summary(full_interact)
+```
 
 
 ***
