@@ -68,6 +68,9 @@ Third part:
 Try transformations, interactions.  Polynomial terms.
 Do backward elimination from your big model from above.
 Go in same order as introduced in the course.
+Model assumptions
+Train and test split
+
 Results
 Dont' characterize all models.  2 or 3 or 4models that seem to be the best.  Say why fully additive model
 didn't work.  Show progress that you made.  End results.  Hit the highlights.
@@ -295,27 +298,267 @@ This does look much better.  Let us try to fit a model with the log transformati
 
 ```{r}
 full_log_model = lm(log(realSum) ~ ., data = london)
-summary(full_a)
+summary(full_log_model)
 ```
 The log transformation gives a much better $R^2$.  The $R^2$ value increased from around 0.27 to 0.6878 with the log transform.
 
+How is this better in terms of RMSE?
+
+```{r}
+sqrt(mean(full_log_model$residuals^2))
+sqrt(mean(full_additive_mod$residuals^2))
+```
+
+The log model also has much lower RMSE.
+
+Try transformations of other variables.
+
+```{r}
+hist(london$rest_index_norm)
+```
+
+```{r}
+hist(log(london$rest_index_norm))
+```
+
+```{r}
+hist(sqrt(london$dist))
+```
+
+Maybe transformations of other variables may be of help.
+
+```{r}
+print("Baseline R^2 value for the full additive log model with all predictors and log transformation of the response realSum")
+summary(full_log_model)$r.squared
+
+print("R^2 Values")
+print("Transformations of dist")
+summary(lm(log(realSum) ~ . - dist + I(dist^2), data = london))$r.squared
+summary(lm(log(realSum) ~ . - dist + I(dist^3), data = london))$r.squared
+summary(lm(log(realSum) ~ . - dist + I(1/dist), data = london))$r.squared
+summary(lm(log(realSum) ~ . - dist + log1p(dist), data = london))$r.squared
+
+print("Transformations of metro_dist")
+summary(lm(log(realSum) ~ . - metro_dist + I(metro_dist^2), data = london))$r.squared
+summary(lm(log(realSum) ~ . - metro_dist + I(metro_dist^3), data = london))$r.squared
+summary(lm(log(realSum) ~ . - metro_dist + I(1/metro_dist), data = london))$r.squared
+summary(lm(log(realSum) ~ . - metro_dist + log1p(metro_dist), data = london))$r.squared
+
+print("Transformations of cleanliness_rating")
+summary(lm(log(realSum) ~ . - cleanliness_rating + I(cleanliness_rating^2), data = london))$r.squared
+summary(lm(log(realSum) ~ . - cleanliness_rating + I(cleanliness_rating^3), data = london))$r.squared
+summary(lm(log(realSum) ~ . - cleanliness_rating + I(1/cleanliness_rating), data = london))$r.squared
+summary(lm(log(realSum) ~ . - cleanliness_rating + log1p(cleanliness_rating), data = london))$r.squared
+
+print("Transformations of guest_satisfaction_overall")
+summary(lm(log(realSum) ~ . - guest_satisfaction_overall + I(guest_satisfaction_overall^2), data = london))$r.squared
+summary(lm(log(realSum) ~ . - guest_satisfaction_overall + I(guest_satisfaction_overall^3), data = london))$r.squared
+summary(lm(log(realSum) ~ . - guest_satisfaction_overall + I(1/guest_satisfaction_overall), data = london))$r.squared
+summary(lm(log(realSum) ~ . - guest_satisfaction_overall + log1p(guest_satisfaction_overall), data = london))$r.squared
+
+print("Transformations of attr_index_norm")
+summary(lm(log(realSum) ~ . - attr_index_norm + I(attr_index_norm^2), data = london))$r.squared
+summary(lm(log(realSum) ~ . - attr_index_norm + I(attr_index_norm^3), data = london))$r.squared
+summary(lm(log(realSum) ~ . - attr_index_norm + I(1/attr_index_norm), data = london))$r.squared
+summary(lm(log(realSum) ~ . - attr_index_norm + log1p(attr_index_norm), data = london))$r.squared
+
+print("Transformations of rest_index_norm")
+summary(lm(log(realSum) ~ . - rest_index_norm + I(rest_index_norm^2), data = london))$r.squared
+summary(lm(log(realSum) ~ . - rest_index_norm + I(rest_index_norm^3), data = london))$r.squared
+summary(lm(log(realSum) ~ . - rest_index_norm + I(1/rest_index_norm), data = london))$r.squared
+summary(lm(log(realSum) ~ . - rest_index_norm + log1p(rest_index_norm), data = london))$r.squared
+
+print("Transformations of lat")
+summary(lm(log(realSum) ~ . - lat + I(lat^2), data = london))$r.squared
+summary(lm(log(realSum) ~ . - lat + I(lat^3), data = london))$r.squared
+summary(lm(log(realSum) ~ . - lat + I(1/lat), data = london))$r.squared
+summary(lm(log(realSum) ~ . - lat + log1p(lat), data = london))$r.squared
+
+print("Transformations of lng")
+summary(lm(log(realSum) ~ . - lng + I(lng^2), data = london))$r.squared
+summary(lm(log(realSum) ~ . - lng + I(lng^3), data = london))$r.squared
+summary(lm(log(realSum) ~ . - lng + I(1/lng), data = london))$r.squared
+summary(lm(log(realSum) ~ . - lng + log1p(lng), data = london))$r.squared
+
+```
+
+The biggest improvement in terms of $R^2$ seems to be with 1/rest_index_norm.
+
+How do these do in terms of RMSE?
+
+```{r}
+sqrt(mean(full_log_model$residuals^2))
+sqrt(mean(lm(log(realSum) ~ . - rest_index_norm + I(1/rest_index_norm), data = london)$residuals^2))
+```
+
+1/rest_index_norm also has lower RMSE.
+
 #### Interaction Analysis
 
-Lets do a model with interactions, and then reduce the number of variables with backward AIC.
+Next do a model with interactions, and then reduce the number of variables with backward AIC.  We will start with the full log model.
 
 ```{r}
-full_interact = lm(log(realSum) ~ (. - room_shared - room_private)^2, data = london)
-summary(full_interact)
+full_interact = lm(log(realSum) ~ .^2, data = london)
+summary(full_interact)$r.squared
+```
+
+The full interaction model has a higher $R^2$ value than any of the transformation models above.  We will have to check if there is overfitting.
+
+```{r}
+sqrt(mean(full_interact$residuals^2))
+```
+
+The full_interact model has a lower RMSE than the transformation models.
+
+The full interaction model is quite large.  Let us use AIC and BIC to reduce the number of predictors.
+
+```{r}
+aic_full_interact = step (full_interact, direction = "backward", trace = FALSE)
+```
+
+
+```{r}
+nrow(summary(full_interact)$coeff)
+nrow(summary(aic_full_interact)$coeff)
+summary(aic_full_interact)$r.squared
+```
+
+AIC decreases the number of coefficients from 214 in the full interaction model to 113 with a decrease in $R^2$ from 0.7335292 to 0.7294467.
+
+Try BIC to get a smaller model
+
+```{r}
+bic_full_interact = step (full_interact, direction = "backward", trace = FALSE, k = log(nrow(london)))
 ```
 
 ```{r}
-mod = step (full_interact, direction = "backward", trace = FALSE)
+nrow(summary(full_interact)$coeff)
+nrow(summary(bic_full_interact)$coeff)
+summary(bic_full_interact)$r.squared
+```
+
+BIC decreases the number of coefficients from 214 in the full interaction model to 45 with a decrease in $R^2$ from 0.7335292 to 0.7171065.
+
+#### Putting It Together
+
+Try a model with transformations and interactions.  Start with the model from the BIC elimination above and add the 1/rest_index_norm transformation.
+
+```{r}
+combined_model =  lm(log(realSum) ~ room_type + person_capacity + multi + biz + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + metro_dist + attr_index_norm  + lng + lat
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:metro_dist + dist:rest_index_norm + metro_dist:attr_index_norm + metro_dist:rest_index_norm
+                     + I(1/rest_index_norm), data = london)
+
+nrow(summary(combined_model)$coeff)
+summary(combined_model)$r.squared
 ```
 
 
 ```{r}
-summary(mod)
+bic_combined = step (combined_model, direction = "backward", trace = FALSE, k = log(nrow(london)))
+
+summary(bic_combined)
+
+vif(bic_combined)
 ```
+
+
+Let us remove predictors to increase explanatory power.
+
+```{r}
+smaller_combined_model =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + lat
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:metro_dist + dist:rest_index_norm + metro_dist:attr_index_norm, data = london)
+
+vif(smaller_combined_model)
+summary(smaller_combined_model)
+summary(smaller_combined_model)$r.squared
+```
+
+```{r}
+anova(smaller_combined_model, combined_model)
+anova(combined_model, full_interact)
+```
+
+
+
+```{r}
+
+#anova(smaller_combined_model, combined_model)
+#anova(combined_model, full_interact)
+calc_loocv_rmse = function(model) {
+  sqrt(mean((resid(model) / (1 - hatvalues(model))) ^ 2))
+}
+
+calc_loocv_rmse(full_additive_mod)
+```
+
+```{r}
+require(caret)
+require(dplyr)
+require(tidyverse)
+
+### Data splitting: leave one out
+train.loocv <- trainControl(method = "LOOCV")
+
+### Training
+model.loocv <- train(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + lat
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:metro_dist + dist:rest_index_norm + metro_dist:attr_index_norm, data = london,
+                     method = "lm",
+                     trControl = train.loocv)
+
+### Present results
+print(model.loocv)
+
+```
+
+```{r}
+### Data splitting: leave one out
+train.loocv <- trainControl(method = "LOOCV")
+
+### Training
+model.loocv <- train(log(realSum) ~ .^2, data = london,
+                     method = "lm",
+                     trControl = train.loocv)
+
+### Present results
+print(model.loocv)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Try bedrooms and person_capacity as numbers, not factors.
 
