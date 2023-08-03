@@ -602,6 +602,8 @@ shapiro.test(resid(smaller_combined_no_unusual)[1:4980])
 bptest(smaller_combined_no_unusual)
 ```
 
+What if we exclude points with large leverage?
+
 ```{r}
 leverage_index = hatvalues(smaller_combined_no_unusual)>(2*mean(hatvalues(smaller_combined_no_unusual)))
 sum(leverage_index)
@@ -616,23 +618,6 @@ assumpt(smaller_b)
 plot(smaller_b)
 shapiro.test(resid(smaller_b)[1:4980])
 ```
-
-```{r}
-#####################################Work on this!
-resid_index = residuals(smaller_combined_no_unusual)>1
-sum(leverage_index)
-fewer = london[!leverage_index,]
-smaller_b =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
-                     + bedrooms + dist + attr_index_norm  + lng + 
-                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
-                     + cleanliness_rating:guest_satisfaction_overall                        
-                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = fewer)
-log_diag(smaller_b, "smaller_combined_no_unusual_b")
-assumpt(smaller_b)
-plot(smaller_b)
-shapiro.test(resid(smaller_b)[1:4980])
-```
-
 
 
 ```{r}
@@ -653,7 +638,9 @@ rmse = sqrt(sum(resid^2)/nrow(london))
 r2 = summary(smaller_combined_bc_nu)$r.squared
 coefs = nrow(summary(smaller_combined_bc_nu)$coeff)
 data.frame(model = "smaller_combined_bc_nu", rmse = rmse, r2 = r2, coefficients = coefs )
+
 ```
+
 #### Model Evaluation
 
 ```{r}
@@ -728,6 +715,48 @@ eval_results = rbind(eval_results, row)
 kable(eval_results)
 ```
 
+As we can see from the correlation plot using the predicted values from smaller_combined_no_unusual_train, the model seems to fall down and underestimate the true values of higher priced rooms.  Maybe there is some intangible reason for the expense of these listings that cannot be explained by the predictors.  What happens if we exclude the listings with realSum values more than 1000?
+
+```{r}
+london_no_unusual_no_outliers = london_no_unusual[!(london_no_unusual$realSum >1000),]
+hA = hist(log(london_no_unusual_no_outliers$realSum), prob = TRUE, plot = FALSE)
+hB = hist(log(london_no_unusual$realSum), prob = TRUE, plot = FALSE)
+plot(hB, col = "dodgerblue")
+plot(hA, col = "darkorange", add = TRUE)
+```
+
+```{r}
+smaller_combined_no_unusual_no_outliers_mod =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + log(dist) + attr_index_norm + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                       
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london_no_unusual_no_outliers)
+
+plot(smaller_combined_no_unusual_no_outliers_mod)
+
+test_fit = predict(smaller_combined_no_unusual_no_outliers_mod, london_no_unusual_no_outliers)
+
+plot(exp(unname(test_fit)) ~ unname(london_no_unusual_no_outliers$realSum))
+abline(1,1)
+
+resid = exp(fitted(smaller_combined_no_unusual_no_outliers_mod)) - london_no_unusual_no_outliers$realSum
+rmse = sqrt(sum(resid^2)/nrow(london_no_unusual_no_outliers))
+r2 = summary(smaller_combined_no_unusual_no_outliers_mod)$r.squared
+coefs = nrow(summary(smaller_combined_no_unusual_no_outliers_mod)$coeff)
+data.frame(model = "smaller_combined_no_unusual_no_outliers_mod", rmse = rmse, r2 = r2, coefficients = coefs )
+shapiro.test(resid(smaller_combined_no_unusual_no_outliers_mod)[1:4999])
+
+```
+
+## Results
+
+Results
+Dont' characterize all models.  2 or 3 or 4models that seem to be the best.  Say why fully additive model
+didn't work.  Show progress that you made.  End results.  Hit the highlights.
+
+The fully additive model, full_additive_mod, did not work because it captured neither the nonlinearity nor the interactions in our model.  As stated above, the element of the model that by far improved model fit the most was the log transformation of the response realSum which is the price of the listed room.  
+
+## Discussion
 
 
 ***
