@@ -1,0 +1,8 @@
+Model Name,Description,RMSE,R^2,LOOCV – RMSE,Comments
+full_additive_mod,Additive model with all possible predictors.  No interactions or transforms.,372.2035,0.2768903,374.9735,Really poor fit
+full_log_model,"Same as full additive model, except log transform of response ",0.3582042,0.6877577,0.3603505,Single biggest improvement
+log_other_transforms,Adding 1/rest_index_norm to full_log_model,0.3549606,0.6933869,0.3570356,Doesn’t add much
+full_interact,"First order interaction of all predictors, log transformation of response",0.3309098,0.7335292,1.116749,Overfit
+bic_full_interact,full_interact model reduced using BIC,0.3409544,0.7171065,0.3460632,
+combined_model,"Combine interactions and transformations, starting with bic_full_interact",0.3399984,0.7186907,0.3452113,
+smaller_combined_model,Reduce extraneous predictors from combined_model,0.3515891,0.6991838,0.3536701,
