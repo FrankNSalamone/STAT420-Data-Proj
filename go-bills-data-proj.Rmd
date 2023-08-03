@@ -273,6 +273,7 @@ BIC, as we would expect, produces a smaller model.
 As there is little difference between these models, we will continue the analysis with the full linear model.  In summary, no one simple additive model stands out.  When we fit the model with bedrooms and person_capacity as integers as in full_additive_less_factors_mod, we get a poorer fit.
 
 ```{r}
+library(knitr)
 kable(linear_exp_results)
 ```
 
@@ -484,7 +485,7 @@ combined_model =  lm(log(realSum) ~ room_type + person_capacity + multi +
     metro_dist:attr_index_norm + metro_dist:rest_index_norm + 
     attr_index_norm:rest_index_norm + rest_index_norm:lat, data = london)
 
-combined_results = log_diag(combined_model)
+combined_results = log_diag(combined_model, "combined_model")
 combined_results
 ```
 
@@ -506,6 +507,114 @@ row
 combined_results = rbind(smaller_combined_model, "smaller_combined_model")
 ```
 
+#### Assumption Analysis
+
+```{r}
+assumpt = function(model, pcol = "gray", lcol = "dodgerblue", alpha = 0.05, plotit = TRUE, testit = TRUE){
+  if (plotit == TRUE){
+    par(mfrow=c(1,2)) 
+    plot(fitted(model), resid(model), col = pcol, pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = paste("Fitted vs. Residuals for ", substitute(model), sep = ""))
+    abline(h = 0, col = lcol, lwd = 2)
+    qqnorm(resid(model), main = paste("Normal Q-Q Plot for ", substitute(model), sep = ""), col = pcol, pch = 20)
+    qqline(resid(model), col = lcol, lwd = 2)
+  }
+  if (testit == TRUE){
+    #test = shapiro.test(resid(model))$p.value
+    #res = ifelse (test > alpha, "Fail to Reject", "Reject")
+    #list("p_val" = test, "decision" = res)
+  }
+}
+```
+
+```{r}
+assumpt(combined_model)
+assumpt(smaller_combined_model)
+```
+
+
+```{r}
+hist(fitted(smaller_combined_model))
+```
+
+
+```{r}
+hist(log(london$realSum))
+```
+
+It looks like the log transformation of the response is not perfect.  We will try the Box-Cox transformation.
+
+```{r}
+library(MASS)
+bc = boxcox(smaller_combined_model)
+(lambda = bc$x[which.max(bc$y)])
+```
+```{r}
+invBoxCox = function(x, lambda)
+    		if (lambda == 0) exp(x) else (lambda*x + 1)^(1/lambda)
+```
+
+
+
+```{r}
+bc_combined_model =  lm(((realSum^lambda-1)/lambda) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london)
+assumpt(bc_combined_model)
+hist(((london$realSum^lambda-1)/lambda), prob = TRUE)
+curve(dnorm(x, mean = mean(((london$realSum^lambda-1)/lambda)), sd = sd(((london$realSum^lambda-1)/lambda))), 
+      col = "darkorange", add = TRUE, lwd = 3)
+residuals = unname(resid(bc_combined_model))[1:4998]
+shapiro.test(residuals)
+resid = invBoxCox(fitted(bc_combined_model), lambda) - london$realSum
+rmse = sqrt(sum(resid^2)/nrow(london))
+r2 = summary(bc_combined_model)$r.squared
+coefs = nrow(summary(bc_combined_model)$coeff)
+data.frame(model = "bc_combined_model", rmse = rmse, r2 = r2, coefficients = coefs )
+```
+
+```{r}
+bc = boxcox(full_additive_mod)
+(lambda = bc$x[which.max(bc$y)])
+```
+```{r}
+bc_combined_model =  lm(((realSum^lambda-1)/lambda) ~ ., data = london)
+assumpt(bc_combined_model)
+```
+
+
+```{r}
+glm.mod <- glm(realSum ~ ., data = london, family=gaussian(link="log"))
+summary(glm.mod)
+```
+
+#### Removal of Unusual Values
+
+In the above analysis, it looks as if the smaller_combined_model works the best.  We will now eliminate unusual values.
+
+```{r}
+plot(smaller_combined_model)
+unusual_index = cooks.distance(smaller_combined_model)>(4/nrow(london))
+london_no_unusual = london[!unusual_index,]
+```
+
+```{r}
+smaller_combined_no_unusual =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london_no_unusual)
+log_diag(smaller_combined_no_unusual, "smaller_combined_no_unusual")
+assumpt(smaller_combined_no_unusual)
+plot(smaller_combined_no_unusual)
+shapiro.test(resid(smaller_combined_no_unusual)[1:4980])
+```
+
+```{r}
+
+```
 
 
 ***
