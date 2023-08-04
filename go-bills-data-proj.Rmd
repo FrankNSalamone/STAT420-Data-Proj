@@ -135,6 +135,8 @@ Go in same order as introduced in the course.
 
 ## Exploratory Analysis
 
+*Inspect Data*
+
 ```{r}
 head(df, 5)
 ```
@@ -149,12 +151,12 @@ ncol(df)
 ```{r}
 str(df)
 ```
-*The summary statistics of the dataset*
+*The summary statistics*
 ```{r}
 summary(df)
 ```
 
-*Missing values in the dataset*
+*Handle Missing Data*
 ```{r}
 colSums(is.na(df))
 ```
@@ -163,39 +165,55 @@ colSums(is.na(df))
 ```{r}
 target = 'realSum'
 numerical_vars = c('dist', 'metro_dist', 'attr_index', 'attr_index_norm', 'rest_index', 'rest_index_norm', 'lng', 'lat') #sapply(df, is.numeric)
-categorical_vars = names(df)[!names(df) %in% numerical_vars]
+categorical_vars = names(df)[!names(df) %in% union(numerical_vars, target)]
 ```
 
-*Remove outliers*
+*Identify Outliers*
 ```{r}
 # Interquartile Range method (IQR)
-get_outliers_idx = function(data) {
-  Q1 = quantile(data, 0.25)
-  Q3 = quantile(data, 0.75)
-  
-  IQR = Q3 - Q1
-  
-  lower_bound = Q1 - 1.5 * IQR
-  upper_bound = Q3 + 1.5 * IQR
-  
-  idx = which(data < lower_bound | data > upper_bound)
-  
+get_outliers_idx = function(data, method = "iqr", threshold = 1) {
+  if (method == "iqr") {
+    Q1 = quantile(data, 0.25)
+    Q3 = quantile(data, 0.75)
+    
+    IQR = Q3 - Q1
+    
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    
+    idx = which(data < lower_bound | data > upper_bound)
+  }
+  else if (method == "z-score") {
+    z_scores = abs(scale(data))
+    idx = which(z_scores <= threshold)
+  }
+  else {
+    stop("method not found")
+  }
+    
   return(idx)
 }
 
 ```
 
+*Remove outliers*
+
 ```{r}
-library(dplyr)
+# for (col in numerical_vars) {
+#   idx = get_outliers_idx(df[[col]])
+#   df[idx, col] = median(df[[col]], na.rm = TRUE)
+# }
 
 idx = c()
 for (col in numerical_vars) {
- idx = union(idx, get_outliers_idx(df[[col]]))
+  idx = union(idx, get_outliers_idx(df[[col]]))
 }
+
 df = df[-idx,]
-print(length(idx))
 ```
-*Numerical variables: hist*
+
+
+*Data Visualization: numerical variables*
 ```{r}
 # par(mfrow = c(1, length(numerical_vars)))
 for (col in numerical_vars) {
@@ -204,10 +222,18 @@ for (col in numerical_vars) {
 ```
 
 
+*The relationship between numerical variables*
 
-*The relationship between variables*
+*Pairplots*
+```{r}
+pairs(df[numerical_vars], col = "steelblue")
+```
 
 *Correlation*
+```{r}
+round(cor(df[numerical_vars]), 2)
+```
+
 ```{r}
 library(corrplot)
 
@@ -217,117 +243,106 @@ corrplot(cor_mx, method = "color")
 ```
 
 
-*Pairplots*
-```{r}
-pairs(df[numerical_vars])
-```
-*Categorical variables*
+*Data Visualization: Categorical variables*
 ```{r}
 
 for (col in categorical_vars) {
-  print(col)
   boxplot(realSum ~ df[[col]], data = df, 
-        main = paste0("realSum vs. ", col), 
-        xlab = "Room Type", 
+        main = paste0("realSum vs ", col), 
+        xlab = col, 
         ylab = "Real Sum")
 }
+```
 
+*Unique values*
+```{r}
+for (cat_var in categorical_vars) {
+  print(unique(df[[cat_var]]))
+}
+```
+*Transform to factor variables*
+```{r}
+df[categorical_vars] = lapply(df[categorical_vars], as.factor)
+```
 
+*Encoding categorical variables*
+```{r}
+df$room_shared = ifelse(df$room_shared == "True", 1, 0)
+df$room_private = ifelse(df$room_private == "True", 1, 0) 
+df$host_is_superhost = ifelse(df$host_is_superhost == "True", 1, 0) 
+df$room_type = as.numeric(df$room_type)
+```
+
+*Exclude collinear predictors*
+```{r}
+df = subset(df, select = -c(attr_index, rest_index, room_shared, room_private))
 ```
 
 *The distribution of the target variable*
 ```{r}
-MIN_VALUE = 0
-MAX_VALUE = 3000
-NUM_BINS = 15
+num_bins = 15
 
-bin_width = (MAX_VALUE - MIN_VALUE) / NUM_BINS
+bin_width = (max(df$realSum) - min(df$realSum)) / num_bins
 
-breakpoints = seq(MIN_VALUE, MAX_VALUE, by = bin_width)
+breakpoints = seq(min(df$realSum), max(df$realSum), by = bin_width)
 
-hist(df$realSum[df$realSum < MAX_VALUE],
+hist(df$realSum[df$realSum < max(df$realSum)],
      main = "Distribution of realSum",
      xlab = "Real Sum",
      ylab = "Frequency",
      breaks = breakpoints)
 ```
 
+## Finding the best additive model
 
-
-***
-
-## Data Cleaning
-
-There are several variables that need to be converted to factors.  These include: room_type, room_shared, room_private, and host_is_superhost.  
-
+*RMSE*
 ```{r}
-unique(df$room_type) 
-unique(df$room_shared)
-unique(df$room_private)
-unique(df$host_is_superhost)
+calc_rmse = function(actual_values, predicted_values) {
+  rmse = sqrt(mean((actual_values - predicted_values) ^ 2))
+  
+  return(rmse)
+}
 ```
 
-The room_type column can converted into a 3 level factor variable with the levels being: "Private room", "Entire home/apt", and "Shared room".
-
-Another question is if room_shared and room_private are independent.
-
+*Split data into train/test*
 ```{r}
-mean(df$room_shared == df$room_private)
+idx = sample(1:nrow(df), floor(0.8 * nrow(df)))
+
+train_data = df[idx, ]
+test_data = df[-idx, ]
+
+target = "realSum"
+
+X_train = train_data[, !(names(train_data) %in% target)]
+y_train = train_data[[target]]
+X_test = test_data[, !(names(test_data) %in% target)]
+y_test = test_data[[target]]
 ```
 
-Based on the data, they mean different things.
-
-Columns multi and biz are factors stored as integers.
-
 ```{r}
-unique(df$multi)
-unique(df$biz)
-```
+res_df = data.frame(predictors = character(),
+                        rmse = numeric(),
+                        stringsAsFactors = FALSE)
 
-Switch these to True and False.
+predictors = names(df)[!(names(df) %in% target)]
 
-```{r}
-df$multi[df$multi == 0] = "False"
-df$multi[df$multi == 1] = "True"
-df$biz[df$biz == 0] = "False"
-df$biz[df$biz == 1] = "True"
-```
+for (size in 1:length(numerical_vars)) {
+  combinations = combn(predictors, size, simplify = FALSE)
+  for (i in 1:length(combinations)) {
+    model = lm(as.formula(paste("realSum ~ ", paste(combinations[[i]], collapse = "+"))), data = train_data)
+    
+    pred = predict(model, newdata = X_test)
 
-The bedrooms and person_capacity column should also be changed to a factor.
+    rmse = calc_rmse(y_test, pred)
+    
+    res_df = rbind(res_df, data.frame(predictors = paste(combinations[[i]], collapse = ","), rmse = rmse)) 
+  }
+}
 
-```{r}
-unique(df$bedrooms)
-unique(df$person_capacity)
-```
-
-Switch all to factors.
-
-```{r}
-df$room_type = as.factor(df$room_type)
-df$room_shared = as.factor(df$room_shared)
-df$room_private = as.factor(df$room_private)
-df$person_capacity = as.factor(df$person_capacity)
-df$host_is_superhost = as.factor(df$host_is_superhost)
-df$multi = as.factor(df$multi)
-df$biz = as.factor(df$biz)
-df$bedrooms = as.factor(df$bedrooms)
-head(df)
-```
-
-attr_index and attr_index_norm will be colinear, as will rest_index and rest_index_norm, so the non-normalized columns.
-
-```{r}
-cor(df$attr_index, df$attr_index_norm)
-df = subset(df, select = -c(attr_index, rest_index))
+res_df[which.min(res_df$rmse),]
 ```
 
 
-See if there are any NAs:
-
-```{r}
-# sum(is.na(df))
-colSums(is.na(df))
-```
 
 ***
 
@@ -392,4 +407,5 @@ summary(full_interact)
 
 
 ***
+
 
