@@ -15,68 +15,6 @@ urlcolor: cyan
 
 ***
 
-### 1. The names of the students who will be contributing to the group project.
-
-Naveen Baskaran (nc42)
-Frank Salamone (frankns2)
-Aleksandr Stepenko (as99)
-
-### 2. A tentative title for the project.
-
-“Predicting Airbnb Prices in London on Weekends”
-
-### 3. Description of the data file (what they contain including number of variables and number of records). You do not necessarily have to list all the variables, but at least mention those of greatest importance.
-
-Our dataset concerns Airbnb rentals in London on the weekends.  It contains 19 variables in this dataset with 5379 records. These records consist of information regarding the characteristics of each rental, and the total price of the listing.  Our dataset is a subset of a larger collection of Airbnb listings in many European cities.
-
-The most important variable is realSum, which is the total price of the listing, and will serve as our response.  There are many categorical variables, including, most importantly,  room_type, room_shared, and host_is_superhost.  The distance to city center, dist, and metro_dist, the distance to the nearest metro station, will be important continuous numeric variables.  
-
-### 4. Background information on the data sets, including specific citation of their source (so that I can also access it).
-
-This dataset was found on Kaggle. Briefly, it is a part of a larger set of Airbnb prices in European cities.  Please see the dataset description below (taken from Kaggle).
-
-https://www.kaggle.com/datasets/thedevastator/airbnb-prices-in-european-cities?resource=download
-
-“This dataset provides a comprehensive look at Airbnb prices in some of the most popular European cities. Each listing is evaluated for various attributes such as room types, cleanliness and satisfaction ratings, bedrooms, distance from the city center, and more to capture an in-depth understanding of Airbnb prices on both weekdays and weekends. Using spatial econometric methods, we analyze and identify the determinants of Airbnb prices across these cities. Our dataset includes information such as realSum (the total price of the listing), room_type (private/shared/entire home/apt), host_is_superhost (boolean value indicating if host is a superhost or not), multi (indicator whether listing is for multiple rooms or not), biz (business indicator) , guest_satisfaction_overall (overall rating from guests comparing all listings offered by host ), bedrooms, dist (distance from city center) , lng & lat coordinates for location identification etc. We hope that this data set offers insight into how global markets are affected by social dynamics and geographical factors which in turn determine pricing strategies for optimal profitability!”
-
-### 5. A brief statement of the business, science, research, or personal interest you have in the data set which you hope to explore. 
-
-From an outsider’s perspective, the Airbnb platform has revolutionized the renting of rooms much as Uber has revolutionized ridesharing.  Airbnb allows users of the platform to monetize property that they would not be able to otherwise.  In order to determine if renting out a room is a good business case or worth the owner’s time, it would be helpful to have an estimate of how much income the room would generate.  Our proposal is to develop a model, trained on the London Weekend Airbnb data, that could predict the room rental income based on predictors known to the person putting the room up for rent.  
-
-### 6. Evidence that the data can be loaded into R. Load the data, and print the first few values of the response variable as evidence.
-
-**Solution**
-
-```{r}
-london = read.csv("london_weekends.csv")
-head(london$realSum)
-head(london)
-nrow(london)
-ncol(london)
-```
-
-
-Methods
-First part:
-Exploratory analysis.  Lay out what variables look like they are related to the response through correlation
-analysis.  Scatterplot matrix.  Basic analysis.  Hint on possibility of collinearity.
-Second part:
-Some connector between predictors and response in linear fashon.  Main effects analysis.
-Aren't completely happy.  Give RMSE, RSE, adjusted r^2.
-Next try to remove predictors to increase explanatory power.
-Third part:
-Try transformations, interactions.  Polynomial terms.
-Do backward elimination from your big model from above.
-Go in same order as introduced in the course.
-Model assumptions
-Train and test split
-
-Results
-Dont' characterize all models.  2 or 3 or 4models that seem to be the best.  Say why fully additive model
-didn't work.  Show progress that you made.  End results.  Hit the highlights.
-Discussion
-Table with candidate model, with RMSC, residuals, assumptions.  Argue why model is the best.
-
 ## Introduction
 
 rubric:  Introduction  Lay everything out in terms of data.  Objective of what want to learn about data.
@@ -105,6 +43,16 @@ attr_index_norm: normalised restaurant index (0-100)
 lng: longitude of the listing location
 lat: latitude of the listing location
 
+Load the data from a .csv file.
+
+```{r}
+london = read.csv("london_weekends.csv")
+head(london$realSum)
+head(london)
+nrow(london)
+ncol(london)
+```
+
 What are the dimensions of the dataset?
 
 ```{r}
@@ -115,21 +63,6 @@ ncol(london)
 There are 5379 rows of data with 20 variables, as described above.
 
 ## Methods
-
-Rubric:
-Methods
-First part:
-Exploratory analysis.  Lay out what variables look like they are related to the response through correlation
-analysis.  Scatterplot matrix.  Basic analysis.  Hint on possibility of collinearity.
-Second part:
-Some connector between predictors and response in linear fashon.  Main effects analysis.
-Aren't completely happy.  Give RMSE, RSE, adjusted r^2.
-Next try to remove predictors to increase explanatory power.
-Third part:
-Try transformations, interactions.  Polynomial terms.
-Do backward elimination from your big model from above.
-Go in same order as introduced in the course.
-
 
 ### Data Cleaning
 
@@ -288,8 +221,10 @@ kable(linear_exp_results)
 Although collinearity likely will not affect prediction, it will affect our ability to perform inference tests.
 
 ```{r}
-london_numeric = subset(london, select = c(cleanliness_rating, guest_satisfaction_overall, dist, metro_dist, attr_index_norm, rest_index_norm))
-pairs(london_numeric)
+library(ggplot2)
+library(GGally)
+london_numeric = subset(london, select = c(realSum, cleanliness_rating, guest_satisfaction_overall, dist, metro_dist, attr_index_norm, rest_index_norm))
+ggpairs(london_numeric)
 ```
 
 Some of these data show collinearity and some look non-linear.  In particular, distance and metro_distance seem to be collinear.
@@ -451,10 +386,10 @@ The full interaction model has a higher $R^2$ value than any of the transformati
 The full interaction model is quite large.  Let us use AIC and BIC to reduce the number of predictors.
 
 ```{r}
-aic_full_interact = step (full_interact, direction = "backward", trace = FALSE)
-row = log_diag(aic_full_interact, "aic_full_interact")
-row
-interact_results = rbind(aic_full_interact, "aic_full_interact")
+#aic_full_interact = step (full_interact, direction = "backward", trace = FALSE)
+#row = log_diag(aic_full_interact, "aic_full_interact")
+#row
+#interact_results = rbind(aic_full_interact, "aic_full_interact")
 ```
 
 AIC decreases the number of coefficients from 214 in the full interaction model to 113 with a decrease in $R^2$ from 0.7335292 to 0.7294467.
@@ -462,10 +397,10 @@ AIC decreases the number of coefficients from 214 in the full interaction model 
 Try BIC to get a smaller model
 
 ```{r}
-bic_full_interact = step (full_interact, direction = "backward", trace = FALSE, k = log(nrow(london)))
-row = log_diag(bic_full_interact, "bic_full_interact")
-row
-interact_results = rbind(bic_full_interact, "bic_full_interact")
+#bic_full_interact = step (full_interact, direction = "backward", trace = FALSE, k = log(nrow(london)))
+#row = log_diag(bic_full_interact, "bic_full_interact")
+#row
+#interact_results = rbind(bic_full_interact, "bic_full_interact")
 ```
 
 BIC decreases the number of coefficients from 214 in the full interaction model to 45 with a decrease in $R^2$ from 0.7335292 to 0.7171065.
@@ -750,14 +685,77 @@ shapiro.test(resid(smaller_combined_no_unusual_no_outliers_mod)[1:4999])
 
 ## Results
 
-Results
-Dont' characterize all models.  2 or 3 or 4models that seem to be the best.  Say why fully additive model
-didn't work.  Show progress that you made.  End results.  Hit the highlights.
+```{r}
+mean(london$realSum)
+```
 
-The fully additive model, full_additive_mod, did not work because it captured neither the nonlinearity nor the interactions in our model.  As stated above, the element of the model that by far improved model fit the most was the log transformation of the response realSum which is the price of the listed room.  
+The simple fully additive model, full_additive_mod, provided for a high RMSE of 372.2035 and an $R^2$ value of 0.2768903 when predicting the Airbnb .  This seems quite poor, as the average realSum value is 364.3897.  We tried a number of methods to improve this model, including removing unusual values, AIC, and BIC, without much improvement.  We tried having the integer predictors as factors and not as factors.  This did not help.  Looking at the pairs plot, the relationship between many of the variables appears nonlinear, indicating that the addition of predictor interactions and transformations may be helpful.
+
+
+The most significant, by far, improvement in our modelling was was the log transform of realSum.  This model full_log_model had a much improved $R^2$, but still high RMSE, at 0.6877577 and 371.2015, respectively.  
+
+```{r}
+plot(fitted(full_additive_mod), london$realSum)
+abline(1,1)
+plot(exp(fitted(full_log_model)), london$realSum)
+abline(1,1)
+
+```
+
+As you can see from the plots above, for both the full_additive_mod and full_log_model, there are still a large number of outliers.
+
+We tried a number of other transformations, none of which had much of an impact on the apparent fit of the model.  Next, we tried the full interaction model.  This improved the $R^2$ to 0.7335292, but RMSE was about the same.	This model also showed evidence of overfitting, as the RMSE went up significantly when used for prediction. In the end, we used BIC to reduce the full interaction model to a more tractable model smaller_combined_model.  The smaller_combined_model was the mainstay of the rest of our analysis.
+
+Our suspicion grew that unusual observations may be leading to large RMSE values.  This can be seen in  
+
+```{r}
+smaller_combined_model =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london)
+plot(smaller_combined_model)
+4/nrow(london)
+```
+In the end, we eliminated 248 rows of data that had a cook's distance of over 4/n.  This improved model fit significantly, and RMSE values decreased to the 110s for many of our models.
+
+```{r}
+smaller_combined_no_unusual_train =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london_train)
+
+test_fit = predict(smaller_combined_no_unusual_train, london_test)
+plot(exp(unname(test_fit)) ~ unname(london_test$realSum))
+abline(1,1)
+```
+
+One difficulty that we had was assuring ourselves that our model did not violate the assumptions of constant variance and normality.  Our best model, smaller_combined_no_unusual_train, did look to have a fairly good Q-Q plot and Predicted vs. Residuals plot. 
+
+```{r}
+assumpt(smaller_combined_no_unusual)
+```
+
+This model did not pass the Shapiro-Wilke test, but apparently this test does not work with large sample sizes, leading to erroneous rejection of the null hypothesis of normal variance.  
+
+We also did try a Box-Cox transformation that did not help much over the log transformation of the response variable.
+
+In the end our model consisting of the predictors:
+                     room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm
+seemed optimal in terms of coming close to satisfying the LINE assumptions, providing low RMSE, and being interpretable.  The main predictors, including room_type, person_capacity, cleanliness_rating, guest_satisfaction, and bedrooms seem like things that would impact the cost of a room.  Also, distance to the city and attractions would make a room more desirable.  The interactions make sense as well, implying synergies between predictors such as distance to the metro and attractions.   
 
 ## Discussion
 
+The Airbnb dataset we chose for our project contains a large number of predictors giving information about a truly subjective number:  How much are you willing to pay for a room.  We constructed an interpretable model with a reasonable number of predictors that has a low RMSE, $R^2$ value and doesn't overfit the data.  On graphical testing, the model appeared to adhere to the LINE assumptions.
+
+There were a number of challenges in our analysis.  Determining the correct data transformations and interactions was more art than science.  The most important manipulations in our analysis were the log transformation of the response and elimination of the unusual observations.
+
+In the end, the biggest challenge of our model was to predict higher priced rentals.  Maybe there are qualities of these listings that the data cannot capture.
 
 ***
 
