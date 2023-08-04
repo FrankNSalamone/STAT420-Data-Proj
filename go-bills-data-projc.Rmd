@@ -1,0 +1,760 @@
+---
+title: "Data Project Team GoBills"
+author: "STAT 420, Summer 2023, Naveen Baskaran (nc42), Frank Salamone (frankns2), Aleksandr Stpenko(as99)"
+date: ''
+output:
+  html_document:
+    theme: readable
+    toc: yes
+  word_document:
+    toc: yes
+  pdf_document: default
+urlcolor: cyan
+---
+
+
+***
+
+## Introduction
+
+From an outsider’s perspective, the Airbnb platform has revolutionized the renting of rooms much as Uber has revolutionized ridesharing.  Airbnb allows users of the platform to monetize property that they would not be able to otherwise.  In order to determine if renting out a room is a good business case or worth the owner’s time, it would be helpful to have an estimate of how much income the room would generate.  Our proposal is to develop a model, trained on the London Weekend Airbnb data, that could predict the room rental income based on predictors known to the person putting the room up for rent.  The data is available on Kaggle at https://www.kaggle.com/datasets/thedevastator/airbnb-prices-in-european-cities, and from the original authors, Gyódi, Kristóf and Nawaro, Łukasz at https://zenodo.org/record/4446043#.Y9Y9ENJBwUE.
+
+The columns of the database include:
+
+  realSum: the full price of accommodation for two people and two nights in EUR
+  room_type: the type of the accommodation 
+  
+room_shared: dummy variable for shared rooms
+room_private: dummy variable for private rooms
+person_capacity: the maximum number of guests 
+host_is_superhost: dummy variable for superhost status
+multi: dummy variable if the listing belongs to hosts with 2-4 offers
+biz: dummy variable if the listing belongs to hosts with more than 4 offers
+cleanliness_rating: cleanliness rating
+guest_satisfaction_overall: overall rating of the listing
+bedrooms: number of bedrooms (0 for studios)
+dist: distance from city centre in km
+metro_dist: distance from nearest metro station in km
+attr_index: attraction index of the listing location
+attr_index_norm: normalised attraction index (0-100)
+rest_index: restaurant index of the listing location
+attr_index_norm: normalised restaurant index (0-100)
+lng: longitude of the listing location
+lat: latitude of the listing location
+
+Load the data from a .csv file.
+
+```{r}
+london = read.csv("london_weekends.csv")
+head(london$realSum)
+head(london)
+nrow(london)
+ncol(london)
+```
+
+What are the dimensions of the dataset?
+
+```{r}
+nrow(london)
+ncol(london)
+```
+
+There are 5379 rows of data with 20 variables, as described above.
+
+## Methods
+
+### Data Cleaning
+
+There are several variables that need to be converted to factors.  These include: room_type, room_shared, room_private, and host_is_superhost.  
+
+```{r}
+unique(london$room_type) 
+unique(london$room_shared)
+unique(london$room_private)
+unique(london$host_is_superhost)
+```
+
+The room_type column can converted into a 3 level factor variable with the levels being: "Private room", "Entire home/apt", and "Shared room".
+
+Another question is if room_shared and room_private are independent.
+
+```{r}
+mean(london$room_shared == london$room_private)
+```
+
+Based on the data, they mean different things.
+
+Columns multi and biz are factors stored as integers.
+
+```{r}
+unique(london$multi)
+unique(london$biz)
+```
+
+Switch these to True and False.
+
+```{r}
+london$multi[london$multi == 0] = "False"
+london$multi[london$multi == 1] = "True"
+london$biz[london$biz == 0] = "False"
+london$biz[london$biz == 1] = "True"
+```
+
+The bedrooms and person_capacity column should also be changed to a factor.
+
+```{r}
+unique(london$bedrooms)
+unique(london$person_capacity)
+```
+
+Switch all to factors, also keep a copy of london with bedrooms and person_capacity as integers 
+
+```{r}
+london$room_type = as.factor(london$room_type)
+london$room_shared = as.factor(london$room_shared)
+london$room_private = as.factor(london$room_private)
+london$multi = as.factor(london$multi)
+london$biz = as.factor(london$biz)
+london$host_is_superhost = as.factor(london$host_is_superhost)
+london_less_factors = london
+london$person_capacity = as.factor(london$person_capacity)
+london$bedrooms = as.factor(london$bedrooms)
+head(london)
+head(london_less_factors)
+```
+
+Variables attr_index and attr_index_norm will be collinear, as will rest_index and rest_index_norm, so the non-normalized columns are removed from the dataframe.  Also, on initial analysis of linear models, it was apparent that room_shared and room_private are exactly collinear with room_type, so they will be removed.  Also, remove the index X
+
+```{r}
+cor(london$attr_index, london$attr_index_norm)
+cor(london$rest_index, london$rest_index_norm)
+london = subset(london, select = -c(attr_index, rest_index, room_shared, room_private, X))
+london_less_factors = subset(london_less_factors, select = -c(attr_index, rest_index, room_shared, room_private, X))
+```
+
+
+See if there are any NAs:
+
+```{r}
+sum(is.na(london))
+```
+
+```{r}
+head(london)
+head(london_less_factors)
+```
+
+
+### Exploratory Analysis
+
+```{r}
+diag = function(model, name){
+  resid = fitted(model) - london$realSum
+  rmse = sqrt(sum(resid^2)/nrow(london))
+  r2 = summary(model)$r.squared
+  coefs = nrow(summary(model)$coeff)
+  data.frame(model = name, rmse = rmse, r2 = r2, coefficients = coefs )
+}
+```
+
+
+#### Main Effects Analysis
+
+```{r}
+full_additive_mod = lm(realSum ~ ., data = london)
+summary(full_additive_mod)
+linear_exp_results = diag(full_additive_mod, "full_additive_mod")
+linear_exp_results
+```
+Fitting an additive model with no interactions to the data yields an $R^2 = 0.2769$.  This seems quite low.  
+
+Bedrooms and person_capacity have a large number of values, maybe a model with them as numbers, not factors would give a better fit.
+
+```{r}
+full_additive_less_factors_mod = lm(realSum ~ ., data = london_less_factors)
+summary(full_additive_less_factors_mod)
+row = diag(full_additive_less_factors_mod, "full_additive_less_factors_mod")
+row
+linear_exp_results = rbind(linear_exp_results, row)
+```
+Using bedrooms and person_capacity gives a slightly worse $R^2 = 0.2581$, as compared to $R^2 = 0.2769$ as factors.
+
+We will use AIC to determine if any of the predictors can be dropped.
+
+```{r}
+aic_full_additive_mod = step(full_additive_mod, direction = "backward", trace = FALSE)
+summary(aic_full_additive_mod)
+row = diag(aic_full_additive_mod, "aic_full_additive_mod")
+row
+linear_exp_results = rbind(linear_exp_results, row)
+```
+AIC eliminates just host_is_superhostTrue, multiTrue, bizTrue, cleanliness_rating, rest_index_norm, and lat.  The $R^2$ value of this model left after AIC elimination is almost the same at 0.2768 as compared to the full additive model with an $R^2$ of 0.2769. 
+
+We will now try BIC to see if this results in a smaller model.
+
+```{r}
+bic_full_additive_mod = step(full_additive_mod, direction = "backward", k = log(nrow(london)), trace = FALSE)
+summary(bic_full_additive_mod)
+row = diag(bic_full_additive_mod, "bic_full_additive_model")
+row
+linear_exp_results = rbind(linear_exp_results, row)
+```
+
+BIC, as we would expect, produces a smaller model.
+
+As there is little difference between these models, we will continue the analysis with the full linear model.  In summary, no one simple additive model stands out.  When we fit the model with bedrooms and person_capacity as integers as in full_additive_less_factors_mod, we get a poorer fit.
+
+```{r}
+library(knitr)
+kable(linear_exp_results)
+```
+
+
+```{r}
+
+```
+
+
+#### Collinearity Analysis
+
+Although collinearity likely will not affect prediction, it will affect our ability to perform inference tests.
+
+```{r}
+library(ggplot2)
+library(GGally)
+london_numeric = subset(london, select = c(realSum, cleanliness_rating, guest_satisfaction_overall, dist, metro_dist, attr_index_norm, rest_index_norm))
+ggpairs(london_numeric)
+```
+
+Some of these data show collinearity and some look non-linear.  In particular, distance and metro_distance seem to be collinear.
+
+Let us check for collinearity using the variance inflation factor.
+
+```{r}
+library(faraway)
+vif(full_additive_mod)
+vif(full_additive_mod)[unname(vif(full_additive_mod)) > 5]
+``` 
+
+Per the textbook, predictors with a VIF of more than 5 are suspicious for collinearity.  The variables with VIF values more than 5 include dist, attr_index_norm, and rest_index_norm. This makes sense as dist is the distance to the city center, and it is likely that if this is small, the number of attractions and restaurants (as measured by attr_index_norm and rest_index_norm) would be high.  There are more attractions and restaurants near the city center.  Also, metro_dist, the distance to a metro station, would likely be small if dist is small. These values are not tremendously larger than 5, so we will keep them in model.
+
+#### Transformation Analysis
+
+What does the distribution of the room prices look like?
+
+```{r}
+hist(london$realSum)
+```
+
+Maybe this would look better if we took the logarithm.  This is a typical transformation for prices that can vary over several orders of magnitude.  
+
+```{r}
+hist(log(london$realSum), prob = TRUE)
+curve(dnorm(x, mean = mean(log(london$realSum)), sd = sd(log(london$realSum))), 
+      col = "darkorange", add = TRUE, lwd = 3)
+```
+
+This does look much better.  The values are more spread out, and approximate a normal distribution.  Let us try to fit a model with the log transformation of the response.
+
+```{r}
+log_diag = function(model, name){
+  resid = exp(fitted(model)) - london$realSum
+  rmse = sqrt(sum(resid^2)/nrow(london))
+  r2 = summary(model)$r.squared
+  coefs = nrow(summary(model)$coeff)
+  data.frame(model = name, rmse = rmse, r2 = r2, coefficients = coefs )
+}
+```
+
+```{r}
+full_log_model = lm(log(realSum) ~ ., data = london)
+summary(full_log_model)
+log_diag(full_log_model, "full_log_model")
+```
+The log transformation gives a much better $R^2$.  The $R^2$ value increased from around 0.27 to 0.6878 with the log transform.  The log model also has much lower RMSE.
+
+We will now try transformations of other variables.
+
+```{r}
+hist(log(london$dist))
+```
+
+```{r}
+hist(sqrt(london$dist), prob = TRUE)
+curve(dnorm(x, mean = mean(sqrt(london$dist)), sd = sd(sqrt(london$dist))), 
+      col = "darkorange", add = TRUE, lwd = 3)
+```
+
+```{r}
+hist(log(london$guest_satisfaction_overall))
+```
+
+```{r}
+hist((london$guest_satisfaction_overall) ^ 3, prob = TRUE)
+curve(dnorm(x, mean = mean((london$guest_satisfaction_overall)^3), sd = sd((london$guest)^3)), 
+      col = "darkorange", add = TRUE, lwd = 3)
+```
+
+
+```{r}
+hist(london$rest_index_norm)
+```
+
+
+```{r}
+hist(log(london$rest_index_norm))
+```
+
+```{r}
+hist(sqrt(london$dist))
+```
+
+Maybe transformations of other variables may be of help.
+
+
+```{r}
+print("Baseline R^2 value for the full additive log model with all predictors and log transformation of the response realSum")
+summary(full_log_model)$r.squared
+
+transform_results = log_diag(lm(log(realSum) ~ . + I(dist^2), data = london), "dist^2")
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(dist^3), data = london), "dist^3"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(sqrt(dist)), data = london), "sqrt(dist)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(log(dist)), data = london), "log(dist)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(1/dist), data = london), "1/dist"))
+
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(metro_dist^2), data = london), "metro_dist^2"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(metro_dist^3), data = london), "metro_dist^3"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(sqrt(metro_dist)), data = london), "sqrt(metro_dist)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(log(metro_dist)), data = london), "log(metro_dist)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(1/metro_dist), data = london), "1/metro_dist"))
+
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(cleanliness_rating^2), data = london), "cleanliness_rating^2"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(cleanliness_rating^3), data = london), "cleanliness_rating^3"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(sqrt(cleanliness_rating)), data = london), "sqrt(cleanliness_rating)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(log(cleanliness_rating)), data = london), "log(cleanliness_rating)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(1/cleanliness_rating), data = london), "1/cleanliness_rating"))
+
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(guest_satisfaction_overall^2), data = london), "guest_satisfaction_overall^2"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(guest_satisfaction_overall^3), data = london), "guest_satisfaction_overall^3"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(sqrt(guest_satisfaction_overall)), data = london), "sqrt(guest_satisfaction_overall)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(log(guest_satisfaction_overall)), data = london), "log(guest_satisfaction_overall)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(1/guest_satisfaction_overall), data = london), "1/guest_satisfaction_overall"))
+
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(attr_index_norm^2), data = london), "attr_index_norm^2"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(attr_index_norm^3), data = london), "attr_index_norm^3"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(sqrt(attr_index_norm)), data = london), "sqrt(attr_index_norm)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(log(attr_index_norm)), data = london), "log(attr_index_norm)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(1/attr_index_norm), data = london), "1/attr_index_norm"))
+
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(rest_index_norm^2), data = london), "rest_index_norm^2"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(rest_index_norm^3), data = london), "rest_index_norm^3"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(sqrt(rest_index_norm)), data = london), "sqrt(rest_index_norm)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(log(rest_index_norm)), data = london), "log(rest_index_norm)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(1/rest_index_norm), data = london), "1/rest_index_norm"))
+
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(lat^2), data = london), "lat^2"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(lat^3), data = london), "lat^3"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(sqrt(lat)), data = london), "sqrt(lat)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(log(lat)), data = london), "log(lat)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(1/lat), data = london), "1/lat"))
+
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(lng^2), data = london), "lng^2"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(lng^3), data = london), "lng^3"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(sqrt(lng)), data = london), "sqrt(lng)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(log(lng)), data = london), "log(lng)"))
+transform_results = rbind(transform_results, log_diag(lm(log(realSum) ~ . + I(1/lng), data = london), "1/lng"))
+
+transform_results
+
+```
+
+The biggest improvement in terms of RMSE seems to be with guest_satisfaction_overall^3.
+
+#### Interaction Analysis
+
+Next do a model with interactions, and then reduce the number of variables with backward AIC.  We will start with the full log model.
+
+```{r}
+full_interact = lm(log(realSum) ~ .^2, data = london)
+interact_results = log_diag(full_interact, "full_interact")
+interact_results
+```
+
+The full interaction model has a higher $R^2$ value than any of the transformation models above.  We will have to check if there is overfitting.The full_interact model has a significantly lower RMSE than the transformation models.
+
+The full interaction model is quite large.  Let us use AIC and BIC to reduce the number of predictors.
+
+```{r}
+#aic_full_interact = step (full_interact, direction = "backward", trace = FALSE)
+#row = log_diag(aic_full_interact, "aic_full_interact")
+#row
+#interact_results = rbind(aic_full_interact, "aic_full_interact")
+```
+
+AIC decreases the number of coefficients from 214 in the full interaction model to 113 with a decrease in $R^2$ from 0.7335292 to 0.7294467.
+
+Try BIC to get a smaller model
+
+```{r}
+#bic_full_interact = step (full_interact, direction = "backward", trace = FALSE, k = log(nrow(london)))
+#row = log_diag(bic_full_interact, "bic_full_interact")
+#row
+#interact_results = rbind(bic_full_interact, "bic_full_interact")
+```
+
+BIC decreases the number of coefficients from 214 in the full interaction model to 45 with a decrease in $R^2$ from 0.7335292 to 0.7171065.
+
+#### Putting It Together
+
+Try a model with transformations and interactions.  Start with the model from the BIC elimination above and add the 1/rest_index_norm transformation.
+
+```{r}
+combined_model =  lm(log(realSum) ~ room_type + person_capacity + multi + 
+    biz + cleanliness_rating + guest_satisfaction_overall + guest_satisfaction_overall^3 + bedrooms + 
+    dist + metro_dist + attr_index_norm + rest_index_norm + lng + 
+    lat + room_type:bedrooms + multi:guest_satisfaction_overall + 
+    biz:cleanliness_rating + biz:lat + cleanliness_rating:guest_satisfaction_overall + 
+    cleanliness_rating:attr_index_norm + bedrooms:attr_index_norm + 
+    dist:metro_dist + dist:rest_index_norm + dist:lng + dist:lat + 
+    metro_dist:attr_index_norm + metro_dist:rest_index_norm + 
+    attr_index_norm:rest_index_norm + rest_index_norm:lat, data = london)
+
+combined_results = log_diag(combined_model, "combined_model")
+combined_results
+```
+
+Adding 1/rest_index_norm marginally increases $R^2$.
+
+
+Let us remove predictors to increase explanatory power.  I removed predictors with collinearity and low p-values 
+
+```{r}
+smaller_combined_model =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london)
+
+vif(smaller_combined_model)
+row = log_diag(smaller_combined_model, "smaller_combined_model")
+row
+combined_results = rbind(smaller_combined_model, "smaller_combined_model")
+```
+
+#### Assumption Analysis
+
+```{r}
+assumpt = function(model, pcol = "gray", lcol = "dodgerblue", alpha = 0.05, plotit = TRUE, testit = TRUE){
+  if (plotit == TRUE){
+    par(mfrow=c(1,2)) 
+    plot(fitted(model), resid(model), col = pcol, pch = 20,
+     xlab = "Fitted", ylab = "Residuals", main = paste("Fitted vs. Residuals for ", substitute(model), sep = ""))
+    abline(h = 0, col = lcol, lwd = 2)
+    qqnorm(resid(model), main = paste("Normal Q-Q Plot for ", substitute(model), sep = ""), col = pcol, pch = 20)
+    qqline(resid(model), col = lcol, lwd = 2)
+  }
+  if (testit == TRUE){
+    #test = shapiro.test(resid(model))$p.value
+    #res = ifelse (test > alpha, "Fail to Reject", "Reject")
+    #list("p_val" = test, "decision" = res)
+  }
+}
+```
+
+```{r}
+assumpt(combined_model)
+assumpt(smaller_combined_model)
+```
+
+
+```{r}
+hist(fitted(smaller_combined_model))
+```
+
+
+```{r}
+hist(log(london$realSum))
+```
+
+It looks like the log transformation of the response is not perfect.  We will try the Box-Cox transformation.
+
+```{r}
+invBoxCox = function(x, lambda)
+    		if (lambda == 0) exp(x) else (lambda*x + 1)^(1/lambda)
+```
+
+
+
+```{r}
+library(MASS)
+bc = boxcox(full_additive_mod)
+(lambda = bc$x[which.max(bc$y)])
+lambda
+bc_model =  lm(((realSum^lambda-1)/lambda) ~ ., data = london)
+assumpt(bc_model)
+hist(((london$realSum^lambda-1)/lambda), prob = TRUE)
+curve(dnorm(x, mean = mean(((london$realSum^lambda-1)/lambda)), sd = sd(((london$realSum^lambda-1)/lambda))), 
+      col = "darkorange", add = TRUE, lwd = 3)
+residuals = unname(resid(bc_model))[1:4998]
+shapiro.test(residuals)
+resid = invBoxCox(fitted(bc_model), lambda) - london$realSum
+rmse = sqrt(sum(resid^2)/nrow(london))
+r2 = summary(bc_model)$r.squared
+coefs = nrow(summary(bc_model)$coeff)
+data.frame(model = "bc_model", rmse = rmse, r2 = r2, coefficients = coefs )
+```
+
+
+#### Removal of Unusual Values
+
+In the above analysis, it looks as if the smaller_combined_model works the best.  We will now eliminate unusual values.
+
+```{r}
+plot(smaller_combined_model)
+unusual_index = cooks.distance(smaller_combined_model)>(4/nrow(london))
+london_no_unusual = london[!unusual_index,]
+london_no_unusual = na.omit(london_no_unusual)
+nrow(london) - nrow(london_no_unusual)
+(nrow(london) - nrow(london_no_unusual))/nrow(london)
+max(london_no_unusual$realSum)
+```
+
+Removing points with a cooks distance > 4/n eliminates 248 points, or 4.6% of the total number of rows.
+
+
+```{r}
+library(lmtest)
+smaller_combined_no_unusual =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london_no_unusual)
+log_diag(smaller_combined_no_unusual, "smaller_combined_no_unusual")
+assumpt(smaller_combined_no_unusual)
+plot(smaller_combined_no_unusual)
+shapiro.test(resid(smaller_combined_no_unusual)[1:4980])
+bptest(smaller_combined_no_unusual)
+```
+
+What if we exclude points with large leverage?
+
+```{r}
+leverage_index = hatvalues(smaller_combined_no_unusual)>(2*mean(hatvalues(smaller_combined_no_unusual)))
+sum(leverage_index)
+fewer = london[!leverage_index,]
+smaller_b =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = fewer)
+log_diag(smaller_b, "smaller_combined_no_unusual_b")
+assumpt(smaller_b)
+plot(smaller_b)
+shapiro.test(resid(smaller_b)[1:4980])
+```
+
+
+```{r}
+library(MASS)
+smaller_combined_bc_nu =  lm(((realSum^lambda-1)/lambda) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london_no_unusual)
+assumpt(smaller_combined_bc_nu)
+hist(((london$realSum^lambda-1)/lambda), prob = TRUE)
+curve(dnorm(x, mean = mean(((london$realSum^lambda-1)/lambda)), sd = sd(((london$realSum^lambda-1)/lambda))), 
+      col = "darkorange", add = TRUE, lwd = 3)
+residuals = unname(resid(smaller_combined_bc_nu))[1:4998]
+shapiro.test(residuals)
+resid = invBoxCox(fitted(smaller_combined_bc_nu), lambda) - london$realSum
+rmse = sqrt(sum(resid^2)/nrow(london))
+r2 = summary(smaller_combined_bc_nu)$r.squared
+coefs = nrow(summary(smaller_combined_bc_nu)$coeff)
+data.frame(model = "smaller_combined_bc_nu", rmse = rmse, r2 = r2, coefficients = coefs )
+
+```
+
+#### Model Evaluation
+
+```{r}
+sample = sample(c(TRUE, FALSE), nrow(london_no_unusual), replace=TRUE, prob=c(0.7,0.3))
+london_train  = london_no_unusual[sample, ]
+london_test   = london_no_unusual[!sample, ]
+```
+
+```{r}
+log_predict_diag = function(true_data, fit_data, model, dataset){
+  resid = exp(unname(fit_data)) - unname(true_data)
+
+  rmse = sqrt(sum(resid^2)/length(fit_data))
+  data.frame(model = model, dataset = dataset, rmse = rmse)
+}
+```
+
+
+```{r}
+library(lmtest)
+smaller_combined_no_unusual_train =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london_train)
+
+test_fit = predict(smaller_combined_no_unusual_train, london_test)
+eval_results = log_predict_diag(london_test$realSum, test_fit, "smaller_combined_no_unusual_test", "test")
+eval_results
+
+train_fit = predict(smaller_combined_no_unusual_train, london_train)
+row = log_predict_diag(london_train$realSum, train_fit, "smaller_combined_no_unusual_train", "training")
+row
+eval_results = rbind(eval_results, row)
+
+
+plot(exp(unname(test_fit)) ~ unname(london_test$realSum))
+abline(1,1)
+
+
+```
+
+```{r}
+full_additive_no_unusual_train =  lm(log(realSum) ~ ., data = london_train)
+
+test_fit = predict(full_additive_no_unusual_train, london_test)
+row = log_predict_diag(london_test$realSum, test_fit, "full_additive_no_unusual_test", "test")
+row
+eval_results = rbind(eval_results, row)
+
+train_fit = predict(full_additive_no_unusual_train, london_train)
+row = log_predict_diag(london_train$realSum, train_fit, "full_additive_no_unusual_train", "training")
+row
+eval_results = rbind(eval_results, row)
+```
+
+```{r}
+full_interact_no_unusual_train =  lm(log(realSum) ~ .^2, data = london_train)
+
+test_fit = predict(full_interact_no_unusual_train, london_test)
+row = log_predict_diag(london_test$realSum, test_fit, "full_interact_no_unusual_train", "test")
+row
+eval_results = rbind(eval_results, row)
+
+train_fit = predict(full_interact_no_unusual_train, london_train)
+row = log_predict_diag(london_train$realSum, train_fit, "full_interact_no_unusual_train", "training")
+row
+eval_results = rbind(eval_results, row)
+```
+
+```{r}
+kable(eval_results)
+```
+
+As we can see from the correlation plot using the predicted values from smaller_combined_no_unusual_train, the model seems to fall down and underestimate the true values of higher priced rooms.  Maybe there is some intangible reason for the expense of these listings that cannot be explained by the predictors.  What happens if we exclude the listings with realSum values more than 1000?
+
+```{r}
+london_no_unusual_no_outliers = london_no_unusual[!(london_no_unusual$realSum >1000),]
+hA = hist(log(london_no_unusual_no_outliers$realSum), prob = TRUE, plot = FALSE)
+hB = hist(log(london_no_unusual$realSum), prob = TRUE, plot = FALSE)
+plot(hB, col = "dodgerblue")
+plot(hA, col = "darkorange", add = TRUE)
+```
+
+```{r}
+smaller_combined_no_unusual_no_outliers_mod =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + log(dist) + attr_index_norm + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                       
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london_no_unusual_no_outliers)
+
+plot(smaller_combined_no_unusual_no_outliers_mod)
+
+test_fit = predict(smaller_combined_no_unusual_no_outliers_mod, london_no_unusual_no_outliers)
+
+plot(exp(unname(test_fit)) ~ unname(london_no_unusual_no_outliers$realSum))
+abline(1,1)
+
+resid = exp(fitted(smaller_combined_no_unusual_no_outliers_mod)) - london_no_unusual_no_outliers$realSum
+rmse = sqrt(sum(resid^2)/nrow(london_no_unusual_no_outliers))
+r2 = summary(smaller_combined_no_unusual_no_outliers_mod)$r.squared
+coefs = nrow(summary(smaller_combined_no_unusual_no_outliers_mod)$coeff)
+data.frame(model = "smaller_combined_no_unusual_no_outliers_mod", rmse = rmse, r2 = r2, coefficients = coefs )
+shapiro.test(resid(smaller_combined_no_unusual_no_outliers_mod)[1:4999])
+
+```
+
+## Results
+
+```{r}
+mean(london$realSum)
+```
+
+The simple fully additive model, full_additive_mod, provided for a high RMSE of 372.2035 and an $R^2$ value of 0.2768903 when predicting the Airbnb .  This seems quite poor, as the average realSum value is 364.3897.  We tried a number of methods to improve this model, including removing unusual values, AIC, and BIC, without much improvement.  We tried having the integer predictors as factors and not as factors.  This did not help.  Looking at the pairs plot, the relationship between many of the variables appears nonlinear, indicating that the addition of predictor interactions and transformations may be helpful.
+
+
+The most significant, by far, improvement in our modelling was was the log transform of realSum.  This model full_log_model had a much improved $R^2$, but still high RMSE, at 0.6877577 and 371.2015, respectively.  
+
+```{r}
+plot(fitted(full_additive_mod), london$realSum)
+abline(1,1)
+plot(exp(fitted(full_log_model)), london$realSum)
+abline(1,1)
+
+```
+
+As you can see from the plots above, for both the full_additive_mod and full_log_model, there are still a large number of outliers.
+
+We tried a number of other transformations, none of which had much of an impact on the apparent fit of the model.  Next, we tried the full interaction model.  This improved the $R^2$ to 0.7335292, but RMSE was about the same.	This model also showed evidence of overfitting, as the RMSE went up significantly when used for prediction. In the end, we used BIC to reduce the full interaction model to a more tractable model smaller_combined_model.  The smaller_combined_model was the mainstay of the rest of our analysis.
+
+Our suspicion grew that unusual observations may be leading to large RMSE values.  This can be seen in  
+
+```{r}
+smaller_combined_model =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london)
+plot(smaller_combined_model)
+4/nrow(london)
+```
+In the end, we eliminated 248 rows of data that had a cook's distance of over 4/n.  This improved model fit significantly, and RMSE values decreased to the 110s for many of our models.
+
+```{r}
+smaller_combined_no_unusual_train =  lm(log(realSum) ~ room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm, data = london_train)
+
+test_fit = predict(smaller_combined_no_unusual_train, london_test)
+plot(exp(unname(test_fit)) ~ unname(london_test$realSum))
+abline(1,1)
+```
+
+One difficulty that we had was assuring ourselves that our model did not violate the assumptions of constant variance and normality.  Our best model, smaller_combined_no_unusual_train, did look to have a fairly good Q-Q plot and Predicted vs. Residuals plot. 
+
+```{r}
+assumpt(smaller_combined_no_unusual)
+```
+
+This model did not pass the Shapiro-Wilke test, but apparently this test does not work with large sample sizes, leading to erroneous rejection of the null hypothesis of normal variance.  
+
+We also did try a Box-Cox transformation that did not help much over the log transformation of the response variable.
+
+In the end our model consisting of the predictors:
+                     room_type + person_capacity + cleanliness_rating + guest_satisfaction_overall
+                     + bedrooms + dist + attr_index_norm  + lng + 
+                     + multi:guest_satisfaction_overall + biz:cleanliness_rating                     
+                     + cleanliness_rating:guest_satisfaction_overall                        
+                     + dist:rest_index_norm + metro_dist:attr_index_norm
+seemed optimal in terms of coming close to satisfying the LINE assumptions, providing low RMSE, and being interpretable.  The main predictors, including room_type, person_capacity, cleanliness_rating, guest_satisfaction, and bedrooms seem like things that would impact the cost of a room.  Also, distance to the city and attractions would make a room more desirable.  The interactions make sense as well, implying synergies between predictors such as distance to the metro and attractions.   
+
+## Discussion
+
+The Airbnb dataset we chose for our project contains a large number of predictors giving information about a truly subjective number:  How much are you willing to pay for a room.  We constructed an interpretable model with a reasonable number of predictors that has a low RMSE, $R^2$ value and doesn't overfit the data.  On graphical testing, the model appeared to adhere to the LINE assumptions.
+
+There were a number of challenges in our analysis.  Determining the correct data transformations and interactions was more art than science.  The most important manipulations in our analysis were the log transformation of the response and elimination of the unusual observations.
+
+In the end, the biggest challenge of our model was to predict higher priced rentals.  Maybe there are qualities of these listings that the data cannot capture.
+
+***
+
