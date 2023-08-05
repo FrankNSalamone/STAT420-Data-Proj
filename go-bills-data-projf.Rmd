@@ -775,7 +775,7 @@ kable(eval_results)
 mean(london$realSum)
 ```
 
-We used multiple linear regression with a simple fully additive model, full_additive_mod, provided for a $RMSE$ of 93.16959 and an $R^2$ value of 0.6757450 when predicting the Airbnb room rates (response, realSum).  This model used dummy variables for categorical predictors such as room_typeThis seems quite poor, as the average realSum value is 364.3897.  We tried a number of methods to improve this model, including removing unusual values, AIC, and BIC, without much improvement.  We tried having the integer predictors as factors and not as factors.  This did not help.  Looking at the pairs plot, the relationship between many of the variables appears nonlinear, indicating that the addition of predictor interactions and transformations may be helpful.
+We used multiple linear regression with a simple fully additive model, full_additive_mod, provided for a $RMSE$ of 93.16959 and an $R^2$ value of 0.6757450 when predicting the Airbnb room rates (response, realSum).  This model used dummy variables for categorical predictors such as room_type and "multi".  W, as the average realSum value is 364.3897.  We tried a number of methods to improve this model, including removing unusual values, AIC, and BIC, without much improvement.  We tried having the integer predictors as factors and not as factors.  This did not help.  Looking at the pairs plot, the relationship between many of the variables appears nonlinear, indicating that the addition of predictor interactions and transformations may be helpful.
 
 
 A significant improvement in our modelling was afforded by the log transform of realSum.  This model full_log_model had animproved $R^2$, but still high RMSE, at 0.6877577 and 371.2015, respectively.  
