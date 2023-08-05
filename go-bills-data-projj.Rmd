@@ -1,6 +1,6 @@
 ---
 title: "Data Project Team GoBills"
-author: "STAT 420, Summer 2023, Naveen Baskaran (nc42), Frank Salamone (frankns2), Aleksandr Stpenko(as99)"
+author: "STAT 420, Summer 2023, Naveen Baskaran (nc42), Frank Salamone (frankns2), Aleksandr Stpenko (as99)"
 date: ''
 output:
   html_document:
@@ -41,7 +41,7 @@ The columns of the database include:
   * lng: longitude of the listing location
   * lat: latitude of the listing location
 
-Load the data from a .csv file.
+### Load the data from a .csv file.
 
 ```{r}
 london = read.csv("london_weekends.csv")
@@ -205,22 +205,6 @@ london$room_type = as.numeric(london$room_type)
 cor(london$attr_index, london$attr_index_norm)
 cor(london$rest_index, london$rest_index_norm)
 london = subset(london, select = -c(attr_index, rest_index, room_shared, room_private))
-```
-
-*The distribution of the target variable*
-```{r}
-num_bins = 15
-
-bin_width = (max(london$realSum) - min(london$realSum)) / num_bins
-
-breakpoints = seq(min(london$realSum), max(london$realSum), by = bin_width)
-
-hist(london$realSum[london$realSum < max(london$realSum)],
-     main = "Distribution of realSum",
-     xlab = "realSum",
-     ylab = "Frequency",
-     breaks = breakpoints,
-     col = "steelblue")
 ```
 
 
@@ -441,33 +425,49 @@ interact_results = log_diag(full_interact, "full_interact")
 interact_results
 ```
 
-The full interaction model has a higher $R^2$ value than any of the transformation models above.  We will have to check if there is overfitting. The full_interact model has a significantly lower $RMSE$ than the transformation models.  The $RMSE$ is about 8 units lower for the interaction model than the transformation models.  
+The full interaction model has a higher $R^2$ value than any of the transformation models above.  We will have to check if there is overfitting. The full_interact model has a significantly lower $RMSE$ than the transformation models.  The $RMSE$ is about 7 units lower for the interaction model than the transformation models.  
 
 The full interaction model is quite large.  Let us use AIC and BIC to reduce the number of predictors.
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 aic_full_interact = step (full_interact, direction = "backward", trace = FALSE)
 row = log_diag(aic_full_interact, "aic_full_interact")
 row
 interact_results = rbind(aic_full_interact, "aic_full_interact")
 ```
 
-AIC decreases the number of coefficients from 214 in the full interaction model to 113 with a decrease in $R^2$ from 0.7242581 to 0.7199981, and an increase in $RMSE$ from 87.85819 to 88.8297.  This is with a decrease of on the order of 100 predictors.
+```{r eval=FALSE, include=FALSE}
+row = log_diag(aic_full_interact, "aic_full_interact")
+row
+interact_results = rbind(aic_full_interact, "aic_full_interact")
+```
+
+
+AIC decreases the number of coefficients from 306 in the full interaction model to 142 with a decrease in $R^2$ from 0.7339381 to 0.7254884, and an increase in $RMSE$ from 87.61681 to 89.33073.  This is with a decrease of on the order of 100 predictors.
 
 Try BIC to get a smaller model
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 bic_full_interact = step (full_interact, direction = "backward", trace = FALSE, k = log(nrow(london)))
 row = log_diag(bic_full_interact, "bic_full_interact")
 row
 interact_results = rbind(bic_full_interact, "bic_full_interact")
 ```
 
-BIC decreases the number of coefficients from 214 in the full interaction model to 45 with a decrease in $R^2$ from 0.7242581 to 0.705297, and an increase in $RMSE$ from 87.85819 to 91.23548.  This is with a decrease of on the order of 157 predictors.
+```{r eval=FALSE, include=FALSE}
+row = log_diag(bic_full_interact, "bic_full_interact")
+row
+interact_results = rbind(bic_full_interact, "bic_full_interact")
+```
+
+
+BIC decreases the number of coefficients from 306 in the full interaction model to 36 with a decrease in $R^2$ from 0.7339381 to 0.7038121, and an increase in $RMSE$ from 87.61681 to 92.78446.  This is with a decrease of on the order of 157 predictors.
+
+The AIC and BIC calculations take a tremendous amount of time to run, so we presented the results as above.
 
 ### Putting It Together
 
-Try a model with transformations and interactions.  Start with the model from the BIC elimination above and add the sqrt(rest_index_norm) transformation.
+Try a model with transformations and interactions.  Start with the model from the BIC elimination model above and add the sqrt(rest_index_norm) transformation.
 
 *Fit the combined model*
 ```{r}
@@ -515,7 +515,7 @@ sum
 
 ### LOOCV to Determine Overfitting
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 library(caret)
 #specify the cross-validation method
 ctrl = trainControl(method = "LOOCV")
@@ -532,7 +532,7 @@ model = train(log(realSum) ~ room_type + person_capacity + multi +
 model
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 #specify the cross-validation method
 ctrl = trainControl(method = "LOOCV")
 ?train
@@ -543,11 +543,11 @@ model = train(realSum ~ .^2, data = london[1:500,],
 ```
 
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 model
 ```
 
-The mean average error goes up when we use the model with all interactions, indicating overfitting.
+The mean average error goes up tremendously for the interaction model, indicating overfitting.  The above code is disabled as it takes quite some time to run.
 
 ### Assumption Analysis
 
@@ -641,6 +641,7 @@ log_predict_diag = function(true_data, fit_data, model, dataset){
 ```
 
 
+*Check the smaller_combined_train model for overfitting*
 ```{r}
 smaller_combined_train =  lm(log(realSum) ~ room_type + person_capacity + multi + 
     biz + cleanliness_rating + guest_satisfaction_overall + bedrooms + 
@@ -665,6 +666,7 @@ abline(1,1)
 
 ```
 
+*Check the additive model for overfitting*
 ```{r}
 full_additive_train =  lm(log(realSum) ~ ., data = london_train)
 test_fit = predict(full_additive_train, london_test)
@@ -678,6 +680,7 @@ row
 eval_results = rbind(eval_results, row)
 ```
 
+*Check the full interaction model for overfitting*
 ```{r}
 full_interact_train =  lm(log(realSum) ~ .^2, data = london_train)
 
@@ -696,6 +699,7 @@ eval_results = rbind(eval_results, row)
 kable(eval_results)
 ```
 
+As we can see above, the full interaction model exhibits significant overfitting, with an increase in RMSE test and train data more than seen in the other models.  Please see the table above.
 
 ## Results
 
@@ -763,13 +767,13 @@ seemed optimal in terms providing low RMSE, having a reasonable number of predic
 
 ## Discussion
 
-The Airbnb dataset we chose for our project contains a large number of predictors giving information about a truly subjective number:  How much are you willing to pay for a room.  We constructed an interpretable model with a reasonable number of predictors that has a low RMSE, high $R^2$ value and doesn't overfit the data. It did look to follow the constant variance assuption on graphical testing using the fitted vs. residuals plot.
+The Airbnb dataset we chose for our project contains a large number of predictors giving information about a truly subjective number:  How much are you willing to pay for a room.  We constructed an interpretable model with a reasonable number of predictors that has a low RMSE, high $R^2$ value and doesn't overfit the data. It did look to follow the constant variance assumption on graphical testing using the fitted vs. residuals plot.
 
 This model could be used by a potential host the first time they put a room up for rent on Airbnb to estimate how much they should charge for the room.  Travelers looking for rooms on Airbnb platform could use this model to estimate how much they should pay for a room, potentially alerting them to overpriced rooms.
 
-There were a number of challenges in our analysis.  Determining the correct data transformations and interactions was more art than science.  This made model selection difficult.  Many transformations seemed to make little difference in model performance, implying that the data did not completely characterize the value of the room.  Maybe the dataset does not account for increases in prices during holidays or other deys with increased demand.
+There were a number of challenges in our analysis.  Determining the correct data transformations and interactions was more art than science.  This made model selection difficult.  Many transformations seemed to make little difference in model performance, implying that the data did not completely characterize the value of the room.  Maybe the dataset does not account for increases in prices during holidays or on other days with increased demand.
 
-There are almost certainly factors affecting room price not accounted for in our data.  These unknown factors cannot be modelled.  It also shoube noted that our model only is relevant for Airbnb rooms in London on weekends.  Price inflation, which may be different for different rooms, may change Airbnb rates in ways not predicted by our models.
+There are almost certainly factors affecting room price not accounted for in our data.  These unknown factors cannot be modeled.  It also should noted that our model only is relevant for Airbnb rooms in London on weekends.  Price inflation, which may be different for different rooms, may change Airbnb rates in ways not predicted by our models.  Errors in the dataset also may hinder out analysis.
 
 In the end, the biggest challenge of our model was to predict higher priced rentals in the range of 600 to 800 units.  These rentals are 2 to 3 times the mean rental cost.  Maybe there are qualities of these listings that the data cannot capture.
 
